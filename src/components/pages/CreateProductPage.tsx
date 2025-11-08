@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Upload, X } from 'lucide-react';
 import { useState } from 'react';
-import { useCurrency } from '../contexts/CurrencyContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 const categories = [
   'Electronics',

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { CreditCard, Truck, Lock } from 'lucide-react';
-import { useCurrency } from '../contexts/CurrencyContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 interface CartItem {
