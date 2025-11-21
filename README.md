@@ -272,3 +272,4 @@ MIT
 ## Related Repositories
 
 - Backend API: https://github.com/yourusername/socialhub-backend
+// Force Vercel redeploy after RLS fix - Fri, Nov 21, 2025  4:27:18 PM
