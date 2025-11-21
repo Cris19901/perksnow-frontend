@@ -39,6 +39,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('🚀 FeedPage: New code is running! Fetching from Supabase...');
     async function fetchFeedData() {
       try {
         setLoading(true);
