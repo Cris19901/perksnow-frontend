@@ -152,7 +152,8 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose }: StoryVi
 
   return (
     <div
-      className="fixed inset-0 z-[10001] bg-black flex items-center justify-center"
+      className="fixed inset-0 bg-black flex items-center justify-center"
+      style={{ zIndex: 9999999 }}
       onClick={onClose}
     >
       {/* Close button */}
