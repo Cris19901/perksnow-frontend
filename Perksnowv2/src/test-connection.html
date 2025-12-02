@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Supabase Connection</title>
+    <script type="module">
+        // Test environment variables
+        console.log('=== ENVIRONMENT VARIABLES ===');
+        console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
+        console.log('VITE_SUPABASE_ANON_KEY:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+        console.log('VITE_API_URL:', import.meta.env.VITE_API_URL);
+
+        // Test Supabase connection
+        import { createClient } from '@supabase/supabase-js';
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+            document.body.innerHTML = '<h1 style="color: red;">ERROR: Environment variables not loaded!</h1>' +
+                '<pre>VITE_SUPABASE_URL: ' + supabaseUrl + '\n' +
+                'VITE_SUPABASE_ANON_KEY: ' + (supabaseKey ? 'SET' : 'NOT SET') + '</pre>';
+        } else {
+            const supabase = createClient(supabaseUrl, supabaseKey);
+
+            // Test database connection
+            async function testConnection() {
+                document.body.innerHTML = '<h1>Testing Supabase Connection...</h1>';
+
+                try {
+                    // Try to fetch posts
+                    const { data: posts, error: postsError } = await supabase
+                        .from('posts')
+                        .select('*')
+                        .limit(5);
+
+                    if (postsError) {
+                        document.body.innerHTML += '<h2 style="color: orange;">Posts Error: ' + postsError.message + '</h2>';
+                    } else {
+                        document.body.innerHTML += '<h2 style="color: green;">✓ Posts query successful! Found ' + (posts?.length || 0) + ' posts</h2>';
+                    }
+
+                    // Try to fetch products
+                    const { data: products, error: productsError } = await supabase
+                        .from('products')
+                        .select('*')
+                        .limit(5);
+
+                    if (productsError) {
+                        document.body.innerHTML += '<h2 style="color: orange;">Products Error: ' + productsError.message + '</h2>';
+                    } else {
+                        document.body.innerHTML += '<h2 style="color: green;">✓ Products query successful! Found ' + (products?.length || 0) + ' products</h2>';
+                    }
+
+                    // Try to fetch users
+                    const { data: users, error: usersError } = await supabase
+                        .from('users')
+                        .select('*')
+                        .limit(5);
+
+                    if (usersError) {
+                        document.body.innerHTML += '<h2 style="color: orange;">Users Error: ' + usersError.message + '</h2>';
+                    } else {
+                        document.body.innerHTML += '<h2 style="color: green;">✓ Users query successful! Found ' + (users?.length || 0) + ' users</h2>';
+                    }
+
+                } catch (err) {
+                    document.body.innerHTML += '<h2 style="color: red;">Exception: ' + err.message + '</h2>';
+                }
+            }
+
+            testConnection();
+        }
+    </script>
+</head>
+<body>
+    <h1>Loading...</h1>
+</body>
+</html>
