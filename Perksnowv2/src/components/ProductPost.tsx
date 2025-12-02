@@ -63,12 +63,18 @@ export function ProductPost({
             <AvatarFallback>{author.name[0]}</AvatarFallback>
           </Avatar>
           <div>
-            <p
-              className="font-medium cursor-pointer hover:underline"
-              onClick={() => author.userId && navigate(`/profile/${author.userId}`)}
-            >
-              {author.name}
-            </p>
+            <div className="flex items-center gap-2">
+              <p
+                className="font-medium cursor-pointer hover:underline"
+                onClick={() => author.userId && navigate(`/profile/${author.userId}`)}
+              >
+                {author.name}
+              </p>
+              <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                <ShoppingCart className="w-3 h-3" />
+                Product
+              </Badge>
+            </div>
             <p className="text-sm text-gray-500">{timestamp}</p>
           </div>
         </div>

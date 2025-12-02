@@ -48,7 +48,7 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'posts' | 'products'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'following' | 'posts' | 'products' | 'trending'>('all');
 
   const fetchFeedData = async () => {
     console.log('🚀 FeedPage: Fetching from Supabase...');
@@ -175,6 +175,17 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
                   All Posts
                 </button>
                 <button
+                  onClick={() => setFilterType('following')}
+                  className={`px-4 py-2 rounded-full whitespace-nowrap transition-all flex items-center gap-1 ${
+                    filterType === 'following'
+                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:border-purple-300'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  Following
+                </button>
+                <button
                   onClick={() => setFilterType('posts')}
                   className={`px-4 py-2 rounded-full whitespace-nowrap transition-all ${
                     filterType === 'posts'
@@ -186,24 +197,58 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
                 </button>
                 <button
                   onClick={() => setFilterType('products')}
-                  className={`px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+                  className={`px-4 py-2 rounded-full whitespace-nowrap transition-all flex items-center gap-1 ${
                     filterType === 'products'
                       ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
                       : 'bg-white border border-gray-200 text-gray-700 hover:border-purple-300'
                   }`}
                 >
+                  <Store className="w-4 h-4" />
                   Products
+                </button>
+                <button
+                  onClick={() => setFilterType('trending')}
+                  className={`px-4 py-2 rounded-full whitespace-nowrap transition-all flex items-center gap-1 ${
+                    filterType === 'trending'
+                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:border-purple-300'
+                  }`}
+                >
+                  🔥 Trending
                 </button>
               </div>
 
               <Stories />
               <CreatePost onPostCreated={fetchFeedData} />
 
-              {/* Loading State */}
+              {/* Loading State - Skeleton */}
               {loading && (
-                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Loading your feed...</p>
+                <div className="space-y-4 sm:space-y-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+                      {/* Header skeleton */}
+                      <div className="flex gap-3 mb-4">
+                        <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-20"></div>
+                        </div>
+                      </div>
+                      {/* Content skeleton */}
+                      <div className="space-y-2 mb-4">
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      </div>
+                      {/* Image skeleton */}
+                      <div className="h-64 bg-gray-200 rounded-lg mb-4"></div>
+                      {/* Actions skeleton */}
+                      <div className="flex gap-4">
+                        <div className="h-8 bg-gray-200 rounded w-20"></div>
+                        <div className="h-8 bg-gray-200 rounded w-20"></div>
+                        <div className="h-8 bg-gray-200 rounded w-20"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -225,14 +270,90 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
                 <div className="space-y-4 sm:space-y-6">
                   {posts.length === 0 && products.length === 0 && (
                     <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-                      <p className="text-lg font-medium text-gray-700 mb-2">No posts yet</p>
-                      <p className="text-sm text-gray-500">Be the first to share something!</p>
+                      {/* Icon */}
+                      <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Plus className="w-10 h-10 text-purple-600" />
+                      </div>
+
+                      {/* Message based on filter type */}
+                      {filterType === 'all' && (
+                        <>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2">No posts in your feed yet</h3>
+                          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                            Start following people or create your first post to see content here
+                          </p>
+                        </>
+                      )}
+                      {filterType === 'following' && (
+                        <>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2">No posts from people you follow</h3>
+                          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                            Follow more people to see their posts in your feed
+                          </p>
+                        </>
+                      )}
+                      {filterType === 'products' && (
+                        <>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2">No products available yet</h3>
+                          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                            Be the first seller! List your first product and start earning
+                          </p>
+                        </>
+                      )}
+                      {filterType === 'trending' && (
+                        <>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2">Nothing trending right now</h3>
+                          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                            Create engaging content and it might trend!
+                          </p>
+                        </>
+                      )}
+                      {filterType === 'posts' && (
+                        <>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2">No social posts yet</h3>
+                          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                            Share your thoughts, photos, or experiences
+                          </p>
+                        </>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 justify-center flex-wrap">
+                        {filterType !== 'products' && (
+                          <Button
+                            onClick={() => navigate('/marketplace')}
+                            variant="default"
+                            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                          >
+                            <Users className="w-4 h-4 mr-2" />
+                            Discover People
+                          </Button>
+                        )}
+                        {(filterType === 'products' || filterType === 'all') && (
+                          <Button
+                            onClick={() => navigate('/create-product')}
+                            variant="outline"
+                            className="border-purple-300 hover:bg-purple-50"
+                          >
+                            <Store className="w-4 h-4 mr-2" />
+                            Sell Product
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus()}
+                          variant="outline"
+                          className="border-purple-300 hover:bg-purple-50"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Post
+                        </Button>
+                      </div>
                     </div>
                   )}
-                  {(filterType === 'all' || filterType === 'posts') && posts.map((post) => (
+                  {(filterType === 'all' || filterType === 'posts' || filterType === 'following' || filterType === 'trending') && posts.map((post) => (
                     <Post key={post.id} {...post} />
                   ))}
-                  {(filterType === 'all' || filterType === 'products') && products.map((post) => (
+                  {(filterType === 'all' || filterType === 'products' || filterType === 'trending') && products.map((post) => (
                     <ProductPost key={post.id} {...post} onAddToCart={onAddToCart} />
                   ))}
                 </div>
