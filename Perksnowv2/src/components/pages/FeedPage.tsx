@@ -362,7 +362,7 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
 
             {/* Sidebar */}
             <aside className="hidden lg:block">
-              <div className="sticky top-20">
+              <div className="sticky top-20 z-10">
                 <Sidebar />
               </div>
             </aside>
