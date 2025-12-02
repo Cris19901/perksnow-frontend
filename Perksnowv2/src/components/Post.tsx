@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { Textarea } from './ui/textarea';
+import { ImageLightbox } from './ImageLightbox';
 
 interface PostProps {
   id: number;
@@ -62,6 +63,8 @@ export function Post({ id, author, content, image, images, video, feeling, locat
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
 
   // Check if current user is the author
   const isAuthor = user?.id === author.userId;
@@ -464,7 +467,10 @@ export function Post({ id, author, content, image, images, video, feeling, locat
         if (imageList.length === 1) {
           // Single image - full width
           return (
-            <div className="w-full">
+            <div className="w-full cursor-pointer" onClick={() => {
+              setLightboxStartIndex(0);
+              setLightboxOpen(true);
+            }}>
               <ImageWithFallback
                 src={imageList[0]}
                 alt="Post image"
@@ -477,12 +483,20 @@ export function Post({ id, author, content, image, images, video, feeling, locat
           return (
             <div className="w-full grid grid-cols-2 gap-0.5">
               {imageList.map((img, idx) => (
-                <ImageWithFallback
+                <div
                   key={idx}
-                  src={img}
-                  alt={`Post image ${idx + 1}`}
-                  className="w-full h-full object-cover max-h-[400px]"
-                />
+                  className="cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => {
+                    setLightboxStartIndex(idx);
+                    setLightboxOpen(true);
+                  }}
+                >
+                  <ImageWithFallback
+                    src={img}
+                    alt={`Post image ${idx + 1}`}
+                    className="w-full h-full object-cover max-h-[400px]"
+                  />
+                </div>
               ))}
             </div>
           );
@@ -490,34 +504,51 @@ export function Post({ id, author, content, image, images, video, feeling, locat
           // Three images - one large, two small
           return (
             <div className="w-full grid grid-cols-2 gap-0.5">
-              <ImageWithFallback
-                src={imageList[0]}
-                alt="Post image 1"
-                className="w-full h-full object-cover row-span-2 max-h-[400px]"
-              />
-              <ImageWithFallback
-                src={imageList[1]}
-                alt="Post image 2"
-                className="w-full h-full object-cover max-h-[200px]"
-              />
-              <ImageWithFallback
-                src={imageList[2]}
-                alt="Post image 3"
-                className="w-full h-full object-cover max-h-[200px]"
-              />
+              {imageList.map((img, idx) => (
+                <div
+                  key={idx}
+                  className={`cursor-pointer hover:opacity-90 transition-opacity ${idx === 0 ? 'row-span-2' : ''}`}
+                  onClick={() => {
+                    setLightboxStartIndex(idx);
+                    setLightboxOpen(true);
+                  }}
+                >
+                  <ImageWithFallback
+                    src={img}
+                    alt={`Post image ${idx + 1}`}
+                    className={`w-full h-full object-cover ${idx === 0 ? 'max-h-[400px]' : 'max-h-[200px]'}`}
+                  />
+                </div>
+              ))}
             </div>
           );
         } else {
           // Four or more images - 2x2 grid (show first 4)
           return (
-            <div className="w-full grid grid-cols-2 gap-0.5">
+            <div className="w-full grid grid-cols-2 gap-0.5 relative">
               {imageList.slice(0, 4).map((img, idx) => (
-                <ImageWithFallback
+                <div
                   key={idx}
-                  src={img}
-                  alt={`Post image ${idx + 1}`}
-                  className="w-full h-full object-cover max-h-[300px]"
-                />
+                  className="cursor-pointer hover:opacity-90 transition-opacity relative"
+                  onClick={() => {
+                    setLightboxStartIndex(idx);
+                    setLightboxOpen(true);
+                  }}
+                >
+                  <ImageWithFallback
+                    src={img}
+                    alt={`Post image ${idx + 1}`}
+                    className="w-full h-full object-cover max-h-[300px]"
+                  />
+                  {/* Show "+N" overlay if more than 4 images */}
+                  {idx === 3 && imageList.length > 4 && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <span className="text-white text-3xl font-bold">
+                        +{imageList.length - 4}
+                      </span>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           );
@@ -667,6 +698,18 @@ export function Post({ id, author, content, image, images, video, feeling, locat
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Lightbox */}
+      {lightboxOpen && (() => {
+        const imageList = images && images.length > 0 ? images : image ? [image] : [];
+        return imageList.length > 0 ? (
+          <ImageLightbox
+            images={imageList}
+            initialIndex={lightboxStartIndex}
+            onClose={() => setLightboxOpen(false)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
