@@ -1,8 +1,8 @@
 {
-  "buildCommand": "cd Perksnowv2 && npm run build",
-  "outputDirectory": "Perksnowv2/dist",
-  "devCommand": "cd Perksnowv2 && npm run dev",
-  "installCommand": "cd Perksnowv2 && npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
   "rewrites": [
     {
       "source": "/(.*)",
