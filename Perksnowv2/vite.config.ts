@@ -13,14 +13,8 @@
       },
     },
     build: {
-      target: 'es2015',
+      target: 'esnext',
       outDir: 'dist',
-      cssCodeSplit: false,
-      rollupOptions: {
-        output: {
-          manualChunks: undefined,
-        },
-      },
     },
     server: {
       host: '0.0.0.0',
