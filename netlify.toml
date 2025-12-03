@@ -1,6 +1,11 @@
 [build]
+  base = "Perksnowv2"
   command = "npm run build"
-  publish = "build"
+  publish = "dist"
+
+[build.environment]
+  VITE_SUPABASE_URL = "https://kswknblwjlkgxgvypkmo.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzd2tuYmx3amxrZ3hndnlwa21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MTg4MTAsImV4cCI6MjA3ODE5NDgxMH0.qK_7wzeOUwRhHTWWtNvpayh1hOfyfXZw5W4X0VbDwZY"
 
 [[redirects]]
   from = "/*"
