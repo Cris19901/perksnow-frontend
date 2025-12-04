@@ -12,23 +12,25 @@ import { NotificationsPage } from './components/pages/NotificationsPage';
 import { CreateProductPage } from './components/pages/CreateProductPage';
 import { CheckoutPage } from './components/pages/CheckoutPage';
 import { SettingsPage } from './components/pages/SettingsPage';
+import { ReelsPage } from './components/pages/ReelsPage';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { toast, Toaster } from 'sonner@2.0.3';
 
-type Page = 
-  | 'landing' 
-  | 'login' 
-  | 'signup' 
-  | 'about' 
-  | 'feed' 
-  | 'marketplace' 
+type Page =
+  | 'landing'
+  | 'login'
+  | 'signup'
+  | 'about'
+  | 'feed'
+  | 'marketplace'
   | 'profile'
   | 'messages'
   | 'notifications'
   | 'create-product'
   | 'checkout'
-  | 'settings';
+  | 'settings'
+  | 'reels';
 
 interface CartItem {
   id: number;
@@ -276,6 +278,14 @@ function AppContent() {
       case 'settings':
         return (
           <SettingsPage
+            onNavigate={handleNavigate}
+            onCartClick={handleCartClick}
+            cartItemsCount={cartItemsCount}
+          />
+        );
+      case 'reels':
+        return (
+          <ReelsPage
             onNavigate={handleNavigate}
             onCartClick={handleCartClick}
             cartItemsCount={cartItemsCount}

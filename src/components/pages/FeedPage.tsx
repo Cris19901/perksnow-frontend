@@ -5,6 +5,7 @@ import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
 import { ProductPost } from '../ProductPost';
 import { Sidebar } from '../Sidebar';
+import { MobileBottomNav } from '../MobileBottomNav';
 import { supabase } from '../../lib/supabase';
 
 // Helper function to format timestamps
@@ -139,7 +140,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
         currentPage="feed"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 sm:gap-6">
           {/* Main Content */}
           <div className="space-y-4 sm:space-y-6">
@@ -193,6 +194,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           </aside>
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav currentPage="feed" onNavigate={onNavigate} />
     </div>
   );
 }
