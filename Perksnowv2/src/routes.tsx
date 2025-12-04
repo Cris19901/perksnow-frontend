@@ -18,6 +18,7 @@ import { ProductDetailPage } from './components/pages/ProductDetailPage';
 import { BookmarksPage } from './components/pages/BookmarksPage';
 import { HashtagPage } from './components/pages/HashtagPage';
 import { PointsPage } from './components/pages/PointsPage';
+import { ReelsPage } from './components/pages/ReelsPage';
 import { AdminRewardPoolPage } from './components/pages/AdminRewardPoolPage';
 import { AdminDashboardPage } from './components/pages/AdminDashboardPage';
 import { AdminUsersPage } from './components/pages/AdminUsersPage';
@@ -109,6 +110,10 @@ export const router = createBrowserRouter([
       {
         path: 'points',
         element: <PointsPage />,
+      },
+      {
+        path: 'reels',
+        element: <ReelsPage />,
       },
       {
         path: 'admin',
