@@ -13,23 +13,38 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
   const [pointsBalance, setPointsBalance] = useState(0);
 
   useEffect(() => {
+    console.log('🔍 MobileBottomNav: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
     if (user) {
       fetchUserPoints();
     }
   }, [user]);
 
   const fetchUserPoints = async () => {
+    if (!user?.id) {
+      console.log('❌ MobileBottomNav: No user ID, skipping points fetch');
+      return;
+    }
+
     try {
+      console.log('🔍 MobileBottomNav: Fetching points for user:', user.id);
       const { data, error } = await supabase
         .from('users')
         .select('points_balance')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ MobileBottomNav: Error fetching points:', error);
+        // Don't throw, just set to 0
+        setPointsBalance(0);
+        return;
+      }
+      console.log('✅ MobileBottomNav: Points fetched:', data?.points_balance || 0);
       setPointsBalance(data?.points_balance || 0);
     } catch (err) {
-      console.error('Error fetching user points:', err);
+      console.error('❌ MobileBottomNav: Exception fetching user points:', err);
+      // Set default points on error so component still works
+      setPointsBalance(0);
     }
   };
 
@@ -72,7 +87,9 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
     },
   ];
 
-  if (!user) return null;
+  // Temporarily show nav even if not logged in for debugging
+  // if (!user) return null;
+  console.log('🎨 MobileBottomNav: Rendering bottom nav');
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
