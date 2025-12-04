@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Header } from '../Header';
 import { PointsDisplay } from '../PointsDisplay';
+import { MobileBottomNav } from '../MobileBottomNav';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -377,6 +378,8 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
           </div>
         </div>
       </div>
+
+      <MobileBottomNav currentPage="points" />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from '../Header';
+import { MobileBottomNav } from '../MobileBottomNav';
 import { Stories } from '../Stories';
 import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
@@ -150,7 +151,7 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Header
           onNavigate={(page) => navigate(`/${page}`)}
           onCartClick={onCartClick}
@@ -495,7 +496,7 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
         }`}
         style={{
           position: 'fixed',
-          bottom: '1.5rem',
+          bottom: '5.5rem',
           right: '1rem',
           zIndex: 9999,
           display: 'block'
@@ -504,6 +505,8 @@ export function FeedPage({ onCartClick, onAddToCart, cartItemsCount }: FeedPageP
       >
         <Plus className="w-6 h-6 text-white" />
       </button>
+
+      <MobileBottomNav currentPage="feed" />
     </>
   );
 }

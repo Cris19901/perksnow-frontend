@@ -1,4 +1,5 @@
 import { Header } from '../Header';
+import { MobileBottomNav } from '../MobileBottomNav';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -350,7 +351,7 @@ export function ProfilePage({ onCartClick, onAddToCart, cartItemsCount }: Profil
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
         <Header
           onNavigate={(page) => navigate(`/${page}`)}
           onCartClick={onCartClick}
@@ -370,7 +371,7 @@ export function ProfilePage({ onCartClick, onAddToCart, cartItemsCount }: Profil
   const avatarUrl = userProfile?.avatar_url;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
       <Header
         onNavigate={(page) => navigate(`/${page}`)}
         onCartClick={onCartClick}
@@ -661,6 +662,8 @@ export function ProfilePage({ onCartClick, onAddToCart, cartItemsCount }: Profil
         onChange={handleCoverUpload}
         style={{ display: 'none' }}
       />
+
+      <MobileBottomNav currentPage="profile" />
     </div>
   );
 }
