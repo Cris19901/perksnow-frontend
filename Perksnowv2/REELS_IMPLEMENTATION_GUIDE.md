@@ -17,45 +17,51 @@ The SQL schema includes:
 - **RLS policies** for security
 - **get_reels_feed()** function for efficient data fetching
 
-## Storage Setup (⏳ To Do)
+## Storage Setup (✅ Already Configured)
 
-### 1. Create Supabase Storage Bucket
-In your Supabase dashboard:
-1. Go to **Storage** section
-2. Create new bucket named **"reels"**
-3. Make it **public** (for video playback)
-4. Set max file size to **100MB** (for video uploads)
+**Videos and thumbnails are saved to Cloudflare R2** using your existing R2 configuration.
 
-### 2. Configure CORS for Video Playback
-```sql
--- In Supabase SQL Editor, run:
-INSERT INTO storage.cors (bucket_id, allowed_origins, allowed_methods)
-VALUES (
-  'reels',
-  ARRAY['*'], -- Allow all origins (or specify your domains)
-  ARRAY['GET', 'HEAD']
-);
+The application automatically:
+- Uploads videos to R2 (or falls back to Supabase if R2 is not configured)
+- Uses the `uploadImage` utility from `src/lib/image-upload.ts`
+- Supports up to **100MB** video files
+- Stores videos in the `videos` bucket with path: `videos/{userId}/{timestamp}-{random}.{ext}`
+- Generates and uploads thumbnails automatically
+
+### R2 Configuration Required
+
+Make sure your `.env` file has these R2 credentials:
+
+```env
+VITE_R2_ACCOUNT_ID=your_account_id
+VITE_R2_ACCESS_KEY_ID=your_access_key
+VITE_R2_SECRET_ACCESS_KEY=your_secret_key
+VITE_R2_BUCKET_NAME=perknow-media
+VITE_R2_PUBLIC_URL=https://your-custom-domain.com (optional)
 ```
 
-### 3. Set Up Storage RLS Policies
-```sql
--- Allow authenticated users to upload
-CREATE POLICY "Authenticated users can upload reels"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (bucket_id = 'reels');
+### R2 Bucket Configuration
 
--- Allow everyone to view reels
-CREATE POLICY "Anyone can view reels"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'reels');
+1. **Enable Public Access** on your R2 bucket for video playback
+2. **Configure CORS** in your R2 bucket settings:
+   ```json
+   [
+     {
+       "AllowedOrigins": ["*"],
+       "AllowedMethods": ["GET", "HEAD"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+3. **Custom Domain** (optional but recommended): Set up a custom domain for faster CDN delivery
 
--- Allow users to delete their own reels
-CREATE POLICY "Users can delete own reels"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (bucket_id = 'reels' AND auth.uid()::text = (storage.foldername(name))[1]);
-```
+### Fallback to Supabase Storage
+
+If R2 is not configured, the app will automatically fall back to Supabase Storage. To use Supabase:
+1. Create a **"videos"** bucket in Supabase Storage
+2. Make it public
+3. The app will use it automatically
 
 ## Frontend Components to Build
 
@@ -167,27 +173,26 @@ USING (bucket_id = 'reels' AND auth.uid()::text = (storage.foldername(name))[1])
 
 ### Upload Reel
 ```typescript
-// Upload video to storage
-const uploadReel = async (videoFile: File, caption: string, thumbnail: File) => {
+import { uploadImage } from '@/lib/image-upload';
+
+// Upload video to R2 (or Supabase fallback)
+const uploadReel = async (videoFile: File, caption: string, thumbnailBlob: Blob) => {
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Upload video
-  const videoPath = `${user.id}/${Date.now()}_${videoFile.name}`;
-  const { data: videoData, error: videoError } = await supabase.storage
-    .from('reels')
-    .upload(videoPath, videoFile);
+  // Convert thumbnail blob to File
+  const thumbnailFile = new File(
+    [thumbnailBlob],
+    `thumb_${Date.now()}.jpg`,
+    { type: 'image/jpeg' }
+  );
+
+  // Upload video to R2 (or Supabase if R2 not configured)
+  const videoUrl = await uploadImage(videoFile, 'videos', user.id);
 
   // Upload thumbnail
-  const thumbPath = `${user.id}/thumb_${Date.now()}.jpg`;
-  const { data: thumbData, error: thumbError } = await supabase.storage
-    .from('reels')
-    .upload(thumbPath, thumbnail);
+  const thumbnailUrl = await uploadImage(thumbnailFile, 'videos', user.id);
 
-  // Get public URLs
-  const videoUrl = supabase.storage.from('reels').getPublicUrl(videoPath).data.publicUrl;
-  const thumbnailUrl = supabase.storage.from('reels').getPublicUrl(thumbPath).data.publicUrl;
-
-  // Create reel record
+  // Create reel record in database
   const { data, error } = await supabase.from('reels').insert({
     user_id: user.id,
     video_url: videoUrl,
