@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Post } from '../Post';
 import { ProductCard } from '../ProductCard';
+import { MobileBottomNav } from '../MobileBottomNav';
 import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 
@@ -66,7 +67,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         currentPage="profile"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
         {/* Cover Photo */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
           <div className="h-48 sm:h-64 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 relative">
@@ -213,6 +214,9 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav currentPage="profile" onNavigate={onNavigate} />
     </div>
   );
 }
