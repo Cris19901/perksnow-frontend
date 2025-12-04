@@ -25,9 +25,9 @@ export async function uploadImage(
   }
 
   // Validate file size
-  const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024; // 50MB for videos, 5MB for images
+  const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024; // 100MB for videos, 5MB for images
   if (file.size > maxSize) {
-    throw new Error(`File too large. Maximum size is ${isVideo ? '50MB' : '5MB'}`);
+    throw new Error(`File too large. Maximum size is ${isVideo ? '100MB' : '5MB'}`);
   }
 
   // Use R2 if configured, otherwise fall back to Supabase

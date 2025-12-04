@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { uploadImage } from '@/lib/image-upload';
 import { toast } from 'sonner';
 
 interface ReelUploadProps {
@@ -134,41 +135,23 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       setUploadProgress(20);
       const thumbnailBlob = await generateThumbnail();
 
-      // Upload video to storage
-      setUploadProgress(30);
-      const videoPath = `${user.id}/${Date.now()}_${videoFile.name}`;
-      const { data: videoData, error: videoError } = await supabase.storage
-        .from('reels')
-        .upload(videoPath, videoFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      // Convert thumbnail blob to File
+      const thumbnailFile = new File(
+        [thumbnailBlob],
+        `thumb_${Date.now()}.jpg`,
+        { type: 'image/jpeg' }
+      );
 
-      if (videoError) throw videoError;
+      // Upload video to R2 (or Supabase as fallback)
+      setUploadProgress(30);
+      const videoUrl = await uploadImage(videoFile, 'videos', user.id);
 
       setUploadProgress(60);
 
-      // Upload thumbnail
-      const thumbPath = `${user.id}/thumb_${Date.now()}.jpg`;
-      const { data: thumbData, error: thumbError } = await supabase.storage
-        .from('reels')
-        .upload(thumbPath, thumbnailBlob, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (thumbError) throw thumbError;
+      // Upload thumbnail to R2 (or Supabase as fallback)
+      const thumbnailUrl = await uploadImage(thumbnailFile, 'videos', user.id);
 
       setUploadProgress(80);
-
-      // Get public URLs
-      const { data: { publicUrl: videoUrl } } = supabase.storage
-        .from('reels')
-        .getPublicUrl(videoPath);
-
-      const { data: { publicUrl: thumbnailUrl } } = supabase.storage
-        .from('reels')
-        .getPublicUrl(thumbPath);
 
       // Create reel record in database
       const { error: insertError } = await supabase.from('reels').insert({
