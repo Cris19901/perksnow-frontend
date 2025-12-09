@@ -16,9 +16,15 @@ When a user creates a post, a database trigger tries to award points but fails b
 **Root Cause**:
 You have a database trigger (probably called something like `award_points_for_post` or similar) that fires when a post is inserted. This trigger references a column `transaction_type` that doesn't exist in your `points_transactions` table.
 
+**🚨 RECOMMENDED: Use Option 2 (Disable Trigger) - see below**
+
+The trigger is referencing many columns that don't exist. Unless you want to keep adding columns, it's easier to just disable it temporarily.
+
+---
+
 **How to Fix** (Choose ONE option):
 
-### Option 1: Add Missing Column (RECOMMENDED - Quick Fix)
+### Option 1: Add Missing Columns (Keep trying if you want the trigger to work)
 
 **This will fix the issue in 30 seconds:**
 
@@ -32,17 +38,23 @@ You have a database trigger (probably called something like `award_points_for_po
 ALTER TABLE points_transactions
 ADD COLUMN IF NOT EXISTS transaction_type TEXT,
 ADD COLUMN IF NOT EXISTS source TEXT,
-ADD COLUMN IF NOT EXISTS description TEXT;
+ADD COLUMN IF NOT EXISTS description TEXT,
+ADD COLUMN IF NOT EXISTS activity TEXT;
 
 -- Set default values for any existing rows
 UPDATE points_transactions
 SET
   transaction_type = COALESCE(transaction_type, 'earn'),
   source = COALESCE(source, 'system'),
-  description = COALESCE(description, 'Points transaction');
+  description = COALESCE(description, 'Points transaction'),
+  activity = COALESCE(activity, 'post_created');
+
+-- If activity column has NOT NULL constraint, set a default
+ALTER TABLE points_transactions
+ALTER COLUMN activity SET DEFAULT 'post_created';
 
 -- Verify all columns were added
-SELECT column_name, data_type, is_nullable
+SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_name = 'points_transactions'
 ORDER BY ordinal_position;
