@@ -1,4 +1,4 @@
-import { Home, PlaySquare, User, TrendingUp } from 'lucide-react';
+import { Home, PlaySquare, User, TrendingUp, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -73,6 +73,13 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
       onClick: () => onNavigate?.('reels'),
     },
     {
+      id: 'create',
+      icon: PlusCircle,
+      label: 'Create',
+      onClick: () => onNavigate?.('create-product'),
+      isCreate: true,
+    },
+    {
       id: 'points',
       icon: TrendingUp,
       label: formatPoints(pointsBalance),
@@ -106,7 +113,14 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
                 isActive ? 'text-purple-600' : 'text-gray-600'
               }`}
             >
-              {item.isPoints ? (
+              {item.isCreate ? (
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg">
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xs mt-1 text-gray-600">{item.label}</span>
+                </div>
+              ) : item.isPoints ? (
                 <div className="flex flex-col items-center">
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
                     isActive
