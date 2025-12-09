@@ -26,16 +26,22 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('🔍 ProfilePage: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
     if (user) {
       fetchProfileData();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
   const fetchProfileData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      console.log('🔍 ProfilePage: Fetching profile data for user:', user?.id);
 
       // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
@@ -44,7 +50,11 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         .eq('id', user?.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('❌ ProfilePage: Error fetching profile:', profileError);
+        throw profileError;
+      }
+      console.log('✅ ProfilePage: Profile data:', profileData);
       setProfile(profileData);
 
       // Fetch user's posts
@@ -81,10 +91,12 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         .order('created_at', { ascending: false});
 
       if (productsError) throw productsError;
+      console.log('✅ ProfilePage: Products fetched:', productsData?.length || 0);
       setProducts(productsData || []);
 
-    } catch (error) {
-      console.error('Error fetching profile data:', error);
+    } catch (error: any) {
+      console.error('❌ ProfilePage: Error fetching profile data:', error);
+      setError(error.message || 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -95,8 +107,8 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  // Show loading state
-  if (loading || !profile) {
+  // Show error state
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header
@@ -105,8 +117,56 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
           cartItemsCount={cartItemsCount}
           currentPage="profile"
         />
-        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <div className="flex items-center justify-center h-[calc(100vh-200px)] px-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
+            <p className="text-red-600 font-semibold mb-2">Error Loading Profile</p>
+            <p className="text-red-500 text-sm mb-4">{error}</p>
+            <Button onClick={() => fetchProfileData()} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        </div>
+        <MobileBottomNav currentPage="profile" onNavigate={onNavigate} />
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header
+          onNavigate={onNavigate}
+          onCartClick={onCartClick}
+          cartItemsCount={cartItemsCount}
+          currentPage="profile"
+        />
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+        <MobileBottomNav currentPage="profile" onNavigate={onNavigate} />
+      </div>
+    );
+  }
+
+  // Show not logged in state
+  if (!user || !profile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header
+          onNavigate={onNavigate}
+          onCartClick={onCartClick}
+          cartItemsCount={cartItemsCount}
+          currentPage="profile"
+        />
+        <div className="flex items-center justify-center h-[calc(100vh-200px)] px-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-8 max-w-md text-center">
+            <p className="text-gray-600 mb-4">Please log in to view your profile</p>
+            <Button onClick={() => onNavigate?.('feed')} className="bg-purple-600 hover:bg-purple-700">
+              Go to Home
+            </Button>
+          </div>
         </div>
         <MobileBottomNav currentPage="profile" onNavigate={onNavigate} />
       </div>

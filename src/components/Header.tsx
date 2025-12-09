@@ -69,7 +69,7 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
                 3
               </Badge>
             </button>
-            <button 
+            <button
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'notifications' ? 'bg-gray-100' : ''}`}
               onClick={() => onNavigate?.('notifications')}
             >
@@ -78,7 +78,14 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
                 5
               </Badge>
             </button>
-            <button 
+            <button
+              className="relative p-2 hover:bg-gray-100 rounded-full transition-colors bg-gradient-to-r from-purple-600 to-pink-600"
+              onClick={() => onNavigate?.('create-product')}
+              title="Create Post or Sell Product"
+            >
+              <Plus className="w-6 h-6 text-white" />
+            </button>
+            <button
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
               onClick={onCartClick}
             >
