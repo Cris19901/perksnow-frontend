@@ -39,95 +39,96 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    console.log('🚀 FeedPage: New code is running! Fetching from Supabase...');
-    async function fetchFeedData() {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchFeedData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('🔍 FeedPage: Fetching feed data from Supabase...');
 
-        // Fetch regular posts with user information
-        const { data: postsData, error: postsError } = await supabase
-          .from('posts')
-          .select(`
-            *,
-            users:user_id (
-              id,
-              username,
-              full_name,
-              avatar_url
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(20);
+      // Fetch regular posts with user information
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-        if (postsError) throw postsError;
+      if (postsError) throw postsError;
 
-        // Fetch products with seller information
-        const { data: productsData, error: productsError } = await supabase
-          .from('products')
-          .select(`
-            *,
-            users:seller_id (
-              id,
-              username,
-              full_name,
-              avatar_url
-            )
-          `)
-          .eq('is_available', true)
-          .order('created_at', { ascending: false })
-          .limit(10);
+      // Fetch products with seller information
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          users:seller_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('is_available', true)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-        if (productsError) throw productsError;
+      if (productsError) throw productsError;
 
-        // Transform posts data to match the Post component format
-        const transformedPosts = postsData?.map((post: any) => ({
-          id: post.id,
-          author: {
-            name: post.users?.full_name || post.users?.username || 'Unknown User',
-            username: `@${post.users?.username || 'unknown'}`,
-            avatar: post.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-          },
-          content: post.content,
-          image: post.image_url,
-          likes: post.likes_count || 0,
-          comments: post.comments_count || 0,
-          shares: post.shares_count || 0,
-          timestamp: formatTimestamp(post.created_at),
-        })) || [];
+      // Transform posts data to match the Post component format
+      const transformedPosts = postsData?.map((post: any) => ({
+        id: post.id,
+        author: {
+          name: post.users?.full_name || post.users?.username || 'Unknown User',
+          username: `@${post.users?.username || 'unknown'}`,
+          avatar: post.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        },
+        content: post.content,
+        image: post.image_url,
+        likes: post.likes_count || 0,
+        comments: post.comments_count || 0,
+        shares: post.shares_count || 0,
+        timestamp: formatTimestamp(post.created_at),
+      })) || [];
 
-        // Transform products data to match the ProductPost component format
-        const transformedProducts = productsData?.map((product: any) => ({
-          id: product.id,
-          author: {
-            name: product.users?.full_name || product.users?.username || 'Unknown Seller',
-            username: `@${product.users?.username || 'unknown'}`,
-            avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-          },
-          content: product.description,
-          product: {
-            name: product.title,
-            price: product.price,
-            image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
-            category: product.category || 'General',
-          },
-          likes: product.likes_count || 0,
-          comments: 0,
-          shares: 0,
-          timestamp: formatTimestamp(product.created_at),
-        })) || [];
+      // Transform products data to match the ProductPost component format
+      const transformedProducts = productsData?.map((product: any) => ({
+        id: product.id,
+        author: {
+          name: product.users?.full_name || product.users?.username || 'Unknown Seller',
+          username: `@${product.users?.username || 'unknown'}`,
+          avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        },
+        content: product.description,
+        product: {
+          name: product.title,
+          price: product.price,
+          image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
+          category: product.category || 'General',
+        },
+        likes: product.likes_count || 0,
+        comments: 0,
+        shares: 0,
+        timestamp: formatTimestamp(product.created_at),
+      })) || [];
 
-        setPosts(transformedPosts);
-        setProducts(transformedProducts);
-      } catch (err: any) {
-        console.error('Error fetching feed data:', err);
-        setError(err.message || 'Failed to load feed');
-      } finally {
-        setLoading(false);
-      }
+      console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts and', transformedProducts.length, 'products');
+      setPosts(transformedPosts);
+      setProducts(transformedProducts);
+    } catch (err: any) {
+      console.error('❌ FeedPage: Error fetching feed data:', err);
+      setError(err.message || 'Failed to load feed');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     fetchFeedData();
   }, []);
 
@@ -145,7 +146,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           {/* Main Content */}
           <div className="space-y-4 sm:space-y-6">
             <Stories />
-            <CreatePost />
+            <CreatePost onPostCreated={fetchFeedData} />
 
             {/* Loading State */}
             {loading && (
