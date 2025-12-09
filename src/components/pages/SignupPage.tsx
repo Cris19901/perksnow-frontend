@@ -5,6 +5,7 @@ import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
 import { useState } from 'react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SignupPageProps {
   onNavigate: (page: string) => void;
@@ -12,6 +13,7 @@ interface SignupPageProps {
 }
 
 export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
+  const { signUp } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -20,11 +22,45 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
     confirmPassword: '',
   });
   const [agreed, setAgreed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would create an account
-    onSignup();
+    setError(null);
+
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    // Validate password strength
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const username = formData.email.split('@')[0];
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
+      await signUp({
+        email: formData.email,
+        password: formData.password,
+        username: username,
+        full_name: fullName,
+      });
+      console.log('✅ SignupPage: Signup successful');
+      onSignup();
+    } catch (err: any) {
+      console.error('❌ SignupPage: Signup failed:', err);
+      setError(err.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,11 +114,17 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
                 Already have an account?{' '}
                 <button
                   onClick={() => onNavigate('login')}
-                  className="text-purple-600 hover:underline"
+                  className="text-purple-600 hover:underline font-semibold"
                 >
                   Log in
                 </button>
               </p>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+                  {error}
+                </div>
+              )}
 
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -168,9 +210,9 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
-                  disabled={!agreed}
+                  disabled={!agreed || loading}
                 >
-                  Create Account
+                  {loading ? 'Creating account...' : 'Create Account'}
                 </Button>
               </form>
 

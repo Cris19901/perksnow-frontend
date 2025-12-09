@@ -4,6 +4,7 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { useState } from 'react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -11,13 +12,27 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would validate credentials
-    onLogin();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await signIn({ email, password });
+      console.log('✅ LoginPage: Login successful');
+      onLogin();
+    } catch (err: any) {
+      console.error('❌ LoginPage: Login failed:', err);
+      setError(err.message || 'Invalid email or password');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,11 +82,17 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                 Don't have an account?{' '}
                 <button
                   onClick={() => onNavigate('signup')}
-                  className="text-purple-600 hover:underline"
+                  className="text-purple-600 hover:underline font-semibold"
                 >
                   Sign up
                 </button>
               </p>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+                  {error}
+                </div>
+              )}
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
@@ -83,6 +104,7 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -103,14 +125,16 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
 
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
+                  disabled={loading}
                 >
-                  Log In
+                  {loading ? 'Logging in...' : 'Log In'}
                 </Button>
               </form>
 
