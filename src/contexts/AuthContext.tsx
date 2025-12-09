@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { signIn, signUp, signOut as authSignOut, SignInData, SignUpData } from '@/lib/auth';
 
@@ -18,20 +18,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Listen for changes on auth state
+    const initializeAuth = async () => {
+      try {
+        console.log('🔍 AuthContext: Initializing auth...');
+
+        // First, check if there's an existing session
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('❌ AuthContext: Error getting session:', error);
+        }
+
+        if (session?.user) {
+          console.log('✅ AuthContext: Found existing session for user:', session.user.id);
+          if (mounted) {
+            setUser(session.user);
+          }
+        } else {
+          console.log('🔍 AuthContext: No existing session found');
+        }
+      } catch (err) {
+        console.error('❌ AuthContext: Exception during init:', err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for changes on auth state (sign in, sign out, token refresh)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔍 AuthContext: Auth state changed:', event, session?.user?.id || 'no user');
+
+      if (mounted) {
+        setUser(session?.user ?? null);
+
+        // Handle token refresh
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('✅ AuthContext: Token refreshed successfully');
+        }
+
+        // Handle sign out
+        if (event === 'SIGNED_OUT') {
+          console.log('🔍 AuthContext: User signed out');
+          setUser(null);
+        }
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSignIn = async (data: SignInData) => {
