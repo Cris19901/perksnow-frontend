@@ -28,26 +28,42 @@ You have a database trigger (probably called something like `award_points_for_po
 4. Copy and paste this SQL:
 
 ```sql
--- Add missing transaction_type column to points_transactions table
+-- Add ALL missing columns to points_transactions table
 ALTER TABLE points_transactions
-ADD COLUMN IF NOT EXISTS transaction_type TEXT;
+ADD COLUMN IF NOT EXISTS transaction_type TEXT,
+ADD COLUMN IF NOT EXISTS source TEXT,
+ADD COLUMN IF NOT EXISTS description TEXT;
 
--- Set a default value for any existing rows
+-- Set default values for any existing rows
 UPDATE points_transactions
-SET transaction_type = 'earn'
-WHERE transaction_type IS NULL;
+SET
+  transaction_type = COALESCE(transaction_type, 'earn'),
+  source = COALESCE(source, 'system'),
+  description = COALESCE(description, 'Points transaction');
 
--- Optionally add a constraint to enforce valid values
-ALTER TABLE points_transactions
-ADD CONSTRAINT transaction_type_check
-CHECK (transaction_type IN ('earn', 'spend', 'bonus', 'refund', 'adjustment'));
-
--- Verify the column was added
+-- Verify all columns were added
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_name = 'points_transactions'
 ORDER BY ordinal_position;
 ```
+
+**⚠️ If you still get errors about missing columns:**
+
+The trigger might reference even more columns. To find out what columns it needs, run this query to see the trigger function:
+
+```sql
+-- Find the trigger function code
+SELECT
+  p.proname AS function_name,
+  pg_get_functiondef(p.oid) AS function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+  AND p.proname LIKE '%point%';
+```
+
+Look at the function code and find all column names in the INSERT INTO statement.
 
 5. Click **RUN** (or press Ctrl+Enter)
 6. You should see success message and the list of columns
@@ -56,21 +72,46 @@ ORDER BY ordinal_position;
 
 ---
 
-### Option 2: Temporarily Disable the Trigger (If you need time to investigate)
+### Option 2: QUICK FIX - Disable the Trigger Temporarily
 
-**⚠️ Warning**: This will disable points earning, but allow posts to be created.
+**If you keep getting column errors, just disable the trigger for now:**
+
+This will let users create posts immediately, but they won't earn points until you fix the trigger properly.
 
 ```sql
--- First, find all triggers on the posts table
-SELECT trigger_name, event_manipulation, action_statement
-FROM information_schema.triggers
-WHERE event_object_table = 'posts';
+-- Find and disable ALL triggers on posts table
+DO $$
+DECLARE
+  trigger_record RECORD;
+BEGIN
+  FOR trigger_record IN
+    SELECT trigger_name
+    FROM information_schema.triggers
+    WHERE event_object_table = 'posts'
+  LOOP
+    EXECUTE format('ALTER TABLE posts DISABLE TRIGGER %I', trigger_record.trigger_name);
+    RAISE NOTICE 'Disabled trigger: %', trigger_record.trigger_name;
+  END LOOP;
+END $$;
+```
 
--- Then disable the problematic trigger (replace TRIGGER_NAME with actual name)
-ALTER TABLE posts DISABLE TRIGGER TRIGGER_NAME;
+**To re-enable triggers later:**
 
--- To re-enable later:
--- ALTER TABLE posts ENABLE TRIGGER TRIGGER_NAME;
+```sql
+-- Re-enable all triggers on posts table
+DO $$
+DECLARE
+  trigger_record RECORD;
+BEGIN
+  FOR trigger_record IN
+    SELECT trigger_name
+    FROM information_schema.triggers
+    WHERE event_object_table = 'posts'
+  LOOP
+    EXECUTE format('ALTER TABLE posts ENABLE TRIGGER %I', trigger_record.trigger_name);
+    RAISE NOTICE 'Enabled trigger: %', trigger_record.trigger_name;
+  END LOOP;
+END $$;
 ```
 
 ---
