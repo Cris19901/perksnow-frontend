@@ -1,46 +1,115 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-const stories = [
-  {
-    id: 1,
-    username: 'Your Story',
-    avatar: 'https://images.unsplash.com/photo-1653691040409-793d2c22ed69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMHBlb3BsZXxlbnwxfHx8fDE3NjI1OTM0NzJ8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    isOwn: true,
-  },
-  {
-    id: 2,
-    username: 'sarah_jones',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    hasStory: true,
-  },
-  {
-    id: 3,
-    username: 'mike_wilson',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    hasStory: true,
-  },
-  {
-    id: 4,
-    username: 'emma_davis',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-    hasStory: true,
-  },
-  {
-    id: 5,
-    username: 'john_smith',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    hasStory: true,
-  },
-  {
-    id: 6,
-    username: 'lisa_anderson',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-    hasStory: true,
-  },
-];
+interface StoryUser {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  full_name: string | null;
+  isOwn?: boolean;
+  hasStory?: boolean;
+}
 
 export function Stories() {
+  const { user } = useAuth();
+  const [stories, setStories] = useState<StoryUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStories();
+  }, [user]);
+
+  const fetchStories = async () => {
+    try {
+      setLoading(true);
+      console.log('🔍 Stories: Fetching users for stories...');
+
+      // Fetch current user's profile first
+      let currentUserStory: StoryUser | null = null;
+      if (user?.id) {
+        const { data: currentUser } = await supabase
+          .from('users')
+          .select('id, username, avatar_url, full_name')
+          .eq('id', user.id)
+          .single();
+
+        if (currentUser) {
+          currentUserStory = {
+            ...currentUser,
+            isOwn: true,
+            username: 'Your Story',
+          };
+        }
+      }
+
+      // Fetch other users (excluding current user)
+      const { data: otherUsers, error } = await supabase
+        .from('users')
+        .select('id, username, avatar_url, full_name')
+        .neq('id', user?.id || '')
+        .limit(10);
+
+      if (error) {
+        console.error('❌ Stories: Error fetching users:', error);
+        return;
+      }
+
+      const storyUsers: StoryUser[] = [];
+
+      // Add current user's story first
+      if (currentUserStory) {
+        storyUsers.push(currentUserStory);
+      }
+
+      // Add other users with hasStory flag
+      if (otherUsers) {
+        otherUsers.forEach((u) => {
+          storyUsers.push({
+            ...u,
+            hasStory: true,
+          });
+        });
+      }
+
+      console.log('✅ Stories: Loaded', storyUsers.length, 'stories');
+      setStories(storyUsers);
+    } catch (err) {
+      console.error('❌ Stories: Exception:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getAvatarUrl = (story: StoryUser) => {
+    return story.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.id}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[80px]">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-200 animate-pulse" />
+              <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (stories.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        <p className="text-gray-500 text-sm text-center">No stories yet</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
       <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
@@ -49,8 +118,8 @@ export function Stories() {
             <div className={`relative ${story.isOwn ? '' : 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'}`}>
               <div className={`${story.isOwn ? '' : 'bg-white p-[2px] rounded-full'}`}>
                 <Avatar className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-white">
-                  <AvatarImage src={story.avatar} />
-                  <AvatarFallback>{story.username[0]}</AvatarFallback>
+                  <AvatarImage src={getAvatarUrl(story)} />
+                  <AvatarFallback>{(story.full_name || story.username || 'U')[0].toUpperCase()}</AvatarFallback>
                 </Avatar>
                 {story.isOwn && (
                   <div className="absolute bottom-0 right-0 w-4 h-4 sm:w-5 sm:h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white">
@@ -60,7 +129,7 @@ export function Stories() {
               </div>
             </div>
             <span className="text-xs text-center max-w-[70px] sm:max-w-[80px] truncate">
-              {story.username}
+              {story.isOwn ? 'Your Story' : story.username}
             </span>
           </div>
         ))}
