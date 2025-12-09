@@ -4,16 +4,13 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface SignupPageProps {
-  onNavigate: (page: string) => void;
-  onSignup: () => void;
-}
-
-export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
+export function SignupPage() {
   const { signUp } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -54,7 +51,7 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
         full_name: fullName,
       });
       console.log('✅ SignupPage: Signup successful');
-      onSignup();
+      navigate('/feed');
     } catch (err: any) {
       console.error('❌ SignupPage: Signup failed:', err);
       setError(err.message || 'Failed to create account');
@@ -73,15 +70,15 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
       <nav className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div 
-              className="flex items-center gap-2 cursor-pointer" 
-              onClick={() => onNavigate('landing')}
+            <Link
+              to="/"
+              className="flex items-center gap-2 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
                 <span className="text-white">S</span>
               </div>
               <span className="text-xl">SocialHub</span>
-            </div>
+            </Link>
           </div>
         </div>
       </nav>
@@ -112,12 +109,12 @@ export function SignupPage({ onNavigate, onSignup }: SignupPageProps) {
               <h2 className="text-3xl mb-2">Create your account</h2>
               <p className="text-gray-600 mb-6">
                 Already have an account?{' '}
-                <button
-                  onClick={() => onNavigate('login')}
+                <Link
+                  to="/login"
                   className="text-purple-600 hover:underline font-semibold"
                 >
                   Log in
-                </button>
+                </Link>
               </p>
 
               {error && (

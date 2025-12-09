@@ -1,15 +1,13 @@
 import { Home, PlaySquare, User, TrendingUp, PlusCircle } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-interface MobileBottomNavProps {
-  currentPage?: string;
-  onNavigate?: (page: string) => void;
-}
-
-export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBottomNavProps) {
+export function MobileBottomNav() {
   const { user } = useAuth();
+  const location = useLocation();
+  const currentPage = location.pathname.slice(1) || 'feed';
   const [pointsBalance, setPointsBalance] = useState(0);
 
   useEffect(() => {
@@ -62,35 +60,35 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
   const navItems = [
     {
       id: 'feed',
+      path: '/feed',
       icon: Home,
       label: 'Home',
-      onClick: () => onNavigate?.('feed'),
     },
     {
       id: 'reels',
+      path: '/reels',
       icon: PlaySquare,
       label: 'Reels',
-      onClick: () => onNavigate?.('reels'),
     },
     {
       id: 'create',
+      path: '/create-product',
       icon: PlusCircle,
       label: 'Create',
-      onClick: () => onNavigate?.('create-product'),
       isCreate: true,
     },
     {
       id: 'points',
+      path: '/points',
       icon: TrendingUp,
       label: formatPoints(pointsBalance),
-      onClick: () => onNavigate?.('points'),
       isPoints: true,
     },
     {
       id: 'profile',
+      path: '/profile',
       icon: User,
       label: 'Profile',
-      onClick: () => onNavigate?.('profile'),
     },
   ];
 
@@ -106,9 +104,9 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
           const isActive = currentPage === item.id;
 
           return (
-            <button
+            <Link
               key={item.id}
-              onClick={item.onClick}
+              to={item.path}
               className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
                 isActive ? 'text-purple-600' : 'text-gray-600'
               }`}
@@ -141,7 +139,7 @@ export function MobileBottomNav({ currentPage = 'feed', onNavigate }: MobileBott
                   <span className="text-xs mt-1">{item.label}</span>
                 </>
               )}
-            </button>
+            </Link>
           );
         })}
       </div>

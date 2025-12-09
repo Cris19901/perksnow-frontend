@@ -3,16 +3,13 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface LoginPageProps {
-  onNavigate: (page: string) => void;
-  onLogin: () => void;
-}
-
-export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
+export function LoginPage() {
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +23,7 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
     try {
       await signIn({ email, password });
       console.log('✅ LoginPage: Login successful');
-      onLogin();
+      navigate('/feed');
     } catch (err: any) {
       console.error('❌ LoginPage: Login failed:', err);
       setError(err.message || 'Invalid email or password');
@@ -41,15 +38,15 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
       <nav className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div 
-              className="flex items-center gap-2 cursor-pointer" 
-              onClick={() => onNavigate('landing')}
+            <Link
+              to="/"
+              className="flex items-center gap-2 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
                 <span className="text-white">S</span>
               </div>
               <span className="text-xl">SocialHub</span>
-            </div>
+            </Link>
           </div>
         </div>
       </nav>
@@ -80,12 +77,12 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
               <h2 className="text-3xl mb-2">Log in to your account</h2>
               <p className="text-gray-600 mb-6">
                 Don't have an account?{' '}
-                <button
-                  onClick={() => onNavigate('signup')}
+                <Link
+                  to="/signup"
                   className="text-purple-600 hover:underline font-semibold"
                 >
                   Sign up
-                </button>
+                </Link>
               </p>
 
               {error && (

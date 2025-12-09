@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CurrencyProvider } from './contexts/CurrencyContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LandingPage } from './components/pages/LandingPage';
 import { LoginPage } from './components/pages/LoginPage';
 import { SignupPage } from './components/pages/SignupPage';
@@ -16,21 +18,6 @@ import { ReelsPage } from './components/pages/ReelsPage';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { toast, Toaster } from 'sonner@2.0.3';
-
-type Page =
-  | 'landing'
-  | 'login'
-  | 'signup'
-  | 'about'
-  | 'feed'
-  | 'marketplace'
-  | 'profile'
-  | 'messages'
-  | 'notifications'
-  | 'create-product'
-  | 'checkout'
-  | 'settings'
-  | 'reels';
 
 interface CartItem {
   id: number;
@@ -115,27 +102,30 @@ const productsDB: Record<number, { name: string; price: number; image: string; s
   },
 };
 
+// Protected route wrapper component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
-  const [currentPage, setCurrentPage] = useState<Page>('landing');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    setCurrentPage('feed');
-  };
-
-  const handleSignup = () => {
-    setIsLoggedIn(true);
-    setCurrentPage('feed');
-  };
-
-  const handleNavigate = (page: string) => {
-    setCurrentPage(page as Page);
-  };
 
   const handleAddToCart = (productId: number) => {
     const product = productsDB[productId];
@@ -199,107 +189,127 @@ function AppContent() {
       toast.error('Your cart is empty');
       return;
     }
-    setCurrentPage('checkout');
+    // Navigation will be handled by CheckoutPage component
     setIsCartOpen(false);
   };
 
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Render the appropriate page based on currentPage state
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'landing':
-        return <LandingPage onNavigate={handleNavigate} />;
-      case 'login':
-        return <LoginPage onNavigate={handleNavigate} onLogin={handleLogin} />;
-      case 'signup':
-        return <SignupPage onNavigate={handleNavigate} onSignup={handleSignup} />;
-      case 'about':
-        return <AboutPage onNavigate={handleNavigate} />;
-      case 'feed':
-        return (
-          <FeedPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            onAddToCart={handleAddToCart}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'marketplace':
-        return (
-          <MarketplacePage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            onAddToCart={handleAddToCart}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'profile':
-        return (
-          <ProfilePage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            onAddToCart={handleAddToCart}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'messages':
-        return (
-          <MessagesPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'notifications':
-        return (
-          <NotificationsPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'create-product':
-        return (
-          <CreateProductPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'checkout':
-        return (
-          <CheckoutPage
-            onNavigate={handleNavigate}
-            cartItems={cartItems}
-            onCartClick={handleCartClick}
-          />
-        );
-      case 'settings':
-        return (
-          <SettingsPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      case 'reels':
-        return (
-          <ReelsPage
-            onNavigate={handleNavigate}
-            onCartClick={handleCartClick}
-            cartItemsCount={cartItemsCount}
-          />
-        );
-      default:
-        return <LandingPage onNavigate={handleNavigate} />;
-    }
-  };
-
   return (
     <>
       <Toaster position="top-center" richColors />
-      {renderPage()}
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/about" element={<AboutPage />} />
+
+        {/* Protected routes */}
+        <Route
+          path="/feed"
+          element={
+            <ProtectedRoute>
+              <FeedPage
+                onCartClick={handleCartClick}
+                onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/marketplace"
+          element={
+            <ProtectedRoute>
+              <MarketplacePage
+                onCartClick={handleCartClick}
+                onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage
+                onCartClick={handleCartClick}
+                onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <MessagesPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-product"
+          element={
+            <ProtectedRoute>
+              <CreateProductPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checkout"
+          element={
+            <ProtectedRoute>
+              <CheckoutPage
+                cartItems={cartItems}
+                onCartClick={handleCartClick}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reels"
+          element={
+            <ProtectedRoute>
+              <ReelsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+
       <CartSheet
         open={isCartOpen}
         onOpenChange={setIsCartOpen}
@@ -319,8 +329,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <CurrencyProvider>
-      <AppContent />
-    </CurrencyProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <CurrencyProvider>
+          <AppContent />
+        </CurrencyProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
