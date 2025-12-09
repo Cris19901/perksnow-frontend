@@ -1,41 +1,101 @@
 # Database Fixes Needed
 
-## 🔴 CRITICAL: points_transactions Schema Error
+## 🔴 CRITICAL & URGENT: Post Creation Blocked by Database Trigger
+
+**Status**: 🚨 **BLOCKING** - Users cannot create posts until this is fixed!
 
 **Error in Console**:
 ```
-column "transaction_type" of relation "points_transactions" does not exist
+❌ CreatePost: Error creating post:
+{code: '42703', message: 'column "transaction_type" of relation "points_transactions" does not exist'}
 ```
 
+**What's Happening**:
+When a user creates a post, a database trigger tries to award points but fails because the `points_transactions` table is missing the `transaction_type` column.
+
 **Root Cause**:
-This error is coming from a Supabase database trigger or stored procedure (not frontend code). The `points_transactions` table is being accessed somewhere with a column name that doesn't exist.
+You have a database trigger (probably called something like `award_points_for_post` or similar) that fires when a post is inserted. This trigger references a column `transaction_type` that doesn't exist in your `points_transactions` table.
 
-**How to Fix**:
+**How to Fix** (Choose ONE option):
 
-### Option 1: Add Missing Column (Recommended)
-1. Go to Supabase Dashboard → SQL Editor
-2. Run this SQL to add the missing column:
+### Option 1: Add Missing Column (RECOMMENDED - Quick Fix)
+
+**This will fix the issue in 30 seconds:**
+
+1. Open Supabase Dashboard
+2. Go to **SQL Editor** (left sidebar)
+3. Click **New Query**
+4. Copy and paste this SQL:
 
 ```sql
--- Add transaction_type column to points_transactions table
+-- Add missing transaction_type column to points_transactions table
 ALTER TABLE points_transactions
 ADD COLUMN IF NOT EXISTS transaction_type TEXT;
 
--- Optionally add a constraint to limit values
+-- Set a default value for any existing rows
+UPDATE points_transactions
+SET transaction_type = 'earn'
+WHERE transaction_type IS NULL;
+
+-- Optionally add a constraint to enforce valid values
 ALTER TABLE points_transactions
 ADD CONSTRAINT transaction_type_check
 CHECK (transaction_type IN ('earn', 'spend', 'bonus', 'refund', 'adjustment'));
+
+-- Verify the column was added
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'points_transactions'
+ORDER BY ordinal_position;
 ```
 
-### Option 2: Find and Fix the Database Function
-1. Go to Supabase Dashboard → Database → Functions
-2. Look for any function that references `points_transactions`
-3. Update the function to use the correct column name
+5. Click **RUN** (or press Ctrl+Enter)
+6. You should see success message and the list of columns
+7. **Hard refresh your app**: Ctrl+Shift+R
+8. Try creating a post again - it should work now!
 
-**Common places this error occurs**:
-- Triggers on user signup (giving welcome points)
-- Triggers on post creation (earning points for activity)
-- Triggers on product purchase (spending/earning points)
+---
+
+### Option 2: Temporarily Disable the Trigger (If you need time to investigate)
+
+**⚠️ Warning**: This will disable points earning, but allow posts to be created.
+
+```sql
+-- First, find all triggers on the posts table
+SELECT trigger_name, event_manipulation, action_statement
+FROM information_schema.triggers
+WHERE event_object_table = 'posts';
+
+-- Then disable the problematic trigger (replace TRIGGER_NAME with actual name)
+ALTER TABLE posts DISABLE TRIGGER TRIGGER_NAME;
+
+-- To re-enable later:
+-- ALTER TABLE posts ENABLE TRIGGER TRIGGER_NAME;
+```
+
+---
+
+### Option 3: Find and Fix the Trigger/Function
+
+**If you want to understand what the trigger does before fixing:**
+
+```sql
+-- Find all triggers on posts table
+SELECT
+  trigger_name,
+  action_statement,
+  action_timing
+FROM information_schema.triggers
+WHERE event_object_table = 'posts';
+
+-- View the function that the trigger calls
+-- Look for function names in the action_statement above
+-- Then view that function in Database → Functions
+```
+
+Once you find the trigger function, you'll need to update it to either:
+- Add the `transaction_type` column to the INSERT statement, OR
+- Remove the `transaction_type` reference if it's not needed
 
 ---
 
