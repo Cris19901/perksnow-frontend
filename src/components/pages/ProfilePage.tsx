@@ -294,7 +294,21 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
               </div>
             ) : (
               posts.map((post) => (
-                <Post key={post.id} {...post} author={post.users} />
+                <Post
+                  key={post.id}
+                  id={post.id}
+                  content={post.content || ''}
+                  image={post.image_url}
+                  likes={post.likes_count || 0}
+                  comments={post.comments_count || 0}
+                  shares={post.shares_count || 0}
+                  timestamp={post.created_at ? new Date(post.created_at).toLocaleDateString() : 'Just now'}
+                  author={{
+                    name: post.users?.full_name || post.users?.username || 'Unknown',
+                    username: post.users?.username || 'unknown',
+                    avatar: post.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`,
+                  }}
+                />
               ))
             )}
           </TabsContent>
@@ -309,9 +323,17 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                 {products.map((product) => (
                   <ProductCard
                     key={product.id}
-                    {...product}
-                    name={product.title}
-                    seller={product.users}
+                    id={product.id}
+                    name={product.title || product.name || 'Untitled'}
+                    price={product.price || 0}
+                    image={product.image_url || product.images?.[0] || ''}
+                    category={product.category || 'Other'}
+                    rating={product.rating || 4.5}
+                    reviews={product.reviews_count || 0}
+                    seller={{
+                      name: product.users?.full_name || product.users?.username || 'Unknown',
+                      avatar: product.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${product.seller_id}`,
+                    }}
                     onAddToCart={onAddToCart}
                   />
                 ))}
