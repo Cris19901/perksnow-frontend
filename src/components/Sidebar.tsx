@@ -63,56 +63,7 @@ export function Sidebar() {
       setLoadingTrending(true);
       console.log('🔍 Sidebar: Fetching trending tags...');
 
-      // Try to fetch from hashtags table if it exists
-      const { data: hashtagData, error: hashtagError } = await supabase
-        .from('hashtags')
-        .select('id, tag, posts_count')
-        .order('posts_count', { ascending: false })
-        .limit(5);
-
-      if (!hashtagError && hashtagData && hashtagData.length > 0) {
-        console.log('✅ Sidebar: Loaded trending from hashtags table');
-        setTrending(hashtagData.map(h => ({
-          id: h.id,
-          tag: h.tag.startsWith('#') ? h.tag : `#${h.tag}`,
-          posts_count: h.posts_count || 0
-        })));
-        return;
-      }
-
-      // Fallback: Generate trending from post categories/content
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('category, content')
-        .not('category', 'is', null)
-        .limit(50);
-
-      if (!postsError && postsData && postsData.length > 0) {
-        // Count categories
-        const categoryCounts: Record<string, number> = {};
-        postsData.forEach(post => {
-          if (post.category) {
-            categoryCounts[post.category] = (categoryCounts[post.category] || 0) + 1;
-          }
-        });
-
-        const trendingFromCategories = Object.entries(categoryCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([cat, count], index) => ({
-            id: `cat-${index}`,
-            tag: `#${cat.replace(/\s+/g, '')}`,
-            posts_count: count
-          }));
-
-        if (trendingFromCategories.length > 0) {
-          console.log('✅ Sidebar: Generated trending from categories');
-          setTrending(trendingFromCategories);
-          return;
-        }
-      }
-
-      // Final fallback: Generate trending from product categories
+      // Generate trending from product categories (most reliable source)
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('category')
@@ -136,14 +87,19 @@ export function Sidebar() {
             posts_count: count
           }));
 
-        console.log('✅ Sidebar: Generated trending from product categories');
-        setTrending(trendingFromProducts);
-      } else {
-        console.log('🔍 Sidebar: No trending data available');
-        setTrending([]);
+        if (trendingFromProducts.length > 0) {
+          console.log('✅ Sidebar: Generated trending from product categories');
+          setTrending(trendingFromProducts);
+          return;
+        }
       }
+
+      // If no products, show empty
+      console.log('🔍 Sidebar: No trending data available');
+      setTrending([]);
     } catch (err) {
       console.error('❌ Sidebar: Exception fetching trending:', err);
+      setTrending([]);
     } finally {
       setLoadingTrending(false);
     }
