@@ -116,11 +116,11 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
     try {
       console.log('🔍 CreatePost: Creating post...');
 
+      // Use image_url for both images and videos since database only has image_url column
       const postData = {
         user_id: user.id,
         content: postText.trim(),
-        image_url: mediaType === 'image' ? uploadedMedia : null,
-        video_url: mediaType === 'video' ? uploadedMedia : null,
+        image_url: uploadedMedia || null,
       };
 
       const { data, error: insertError } = await supabase
