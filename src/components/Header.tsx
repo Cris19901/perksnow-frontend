@@ -1,10 +1,12 @@
 import { Search, Home, Store, Bell, MessageCircle, ShoppingCart, Menu, User, Settings, Plus } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Input } from './ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './ui/sheet';
 import { CurrencySwitcher } from './CurrencySwitcher';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,24 +17,31 @@ import {
 } from './ui/dropdown-menu';
 
 interface HeaderProps {
-  onNavigate?: (page: string) => void;
   onCartClick?: () => void;
   cartItemsCount?: number;
-  currentPage?: string;
 }
 
-export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPage = 'feed' }: HeaderProps) {
+export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const currentPage = location.pathname.slice(1) || 'feed';
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
+  };
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
       <div className="max-w-[1400px] mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate?.('feed')}>
+          <Link to="/feed" className="flex items-center gap-2 cursor-pointer">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
               <span className="text-white">S</span>
             </div>
             <span className="hidden sm:block">SocialHub</span>
-          </div>
+          </Link>
 
           {/* Search - Hidden on mobile */}
           <div className="hidden md:flex flex-1 max-w-md mx-4">
@@ -48,43 +57,43 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-2 lg:gap-4">
-            <button 
+            <Link
+              to="/feed"
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'feed' ? 'bg-gray-100' : ''}`}
-              onClick={() => onNavigate?.('feed')}
             >
               <Home className="w-6 h-6" />
-            </button>
-            <button 
+            </Link>
+            <Link
+              to="/marketplace"
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'marketplace' ? 'bg-gray-100' : ''}`}
-              onClick={() => onNavigate?.('marketplace')}
             >
               <Store className="w-6 h-6" />
-            </button>
-            <button 
+            </Link>
+            <Link
+              to="/messages"
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'messages' ? 'bg-gray-100' : ''}`}
-              onClick={() => onNavigate?.('messages')}
             >
               <MessageCircle className="w-6 h-6" />
               <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
                 3
               </Badge>
-            </button>
-            <button
+            </Link>
+            <Link
+              to="/notifications"
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'notifications' ? 'bg-gray-100' : ''}`}
-              onClick={() => onNavigate?.('notifications')}
             >
               <Bell className="w-6 h-6" />
               <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
                 5
               </Badge>
-            </button>
-            <button
+            </Link>
+            <Link
+              to="/create-product"
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors bg-gradient-to-r from-purple-600 to-pink-600"
-              onClick={() => onNavigate?.('create-product')}
               title="Create Post or Sell Product"
             >
               <Plus className="w-6 h-6 text-white" />
-            </button>
+            </Link>
             <button
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
               onClick={onCartClick}
@@ -107,20 +116,20 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onNavigate?.('profile')}>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <User className="w-4 h-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNavigate?.('create-product')}>
+                <DropdownMenuItem onClick={() => navigate('/create-product')}>
                   <Plus className="w-4 h-4 mr-2" />
                   Sell Product
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onNavigate?.('settings')}>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onNavigate?.('landing')}>
+                <DropdownMenuItem onClick={handleLogout}>
                   Log Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -153,44 +162,44 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
                   Navigate through the app
                 </SheetDescription>
                 <div className="flex flex-col gap-4 mt-4">
-                  <Button 
-                    variant={currentPage === 'feed' ? 'default' : 'ghost'} 
+                  <Button
+                    variant={currentPage === 'feed' ? 'default' : 'ghost'}
                     className="justify-start gap-2"
-                    onClick={() => onNavigate?.('feed')}
+                    onClick={() => navigate('/feed')}
                   >
                     <Home className="w-5 h-5" />
                     Home
                   </Button>
-                  <Button 
-                    variant={currentPage === 'marketplace' ? 'default' : 'ghost'} 
+                  <Button
+                    variant={currentPage === 'marketplace' ? 'default' : 'ghost'}
                     className="justify-start gap-2"
-                    onClick={() => onNavigate?.('marketplace')}
+                    onClick={() => navigate('/marketplace')}
                   >
                     <Store className="w-5 h-5" />
                     Marketplace
                   </Button>
-                  <Button 
-                    variant={currentPage === 'messages' ? 'default' : 'ghost'} 
+                  <Button
+                    variant={currentPage === 'messages' ? 'default' : 'ghost'}
                     className="justify-start gap-2 relative"
-                    onClick={() => onNavigate?.('messages')}
+                    onClick={() => navigate('/messages')}
                   >
                     <MessageCircle className="w-5 h-5" />
                     Messages
                     <Badge className="ml-auto bg-red-500">3</Badge>
                   </Button>
-                  <Button 
-                    variant={currentPage === 'notifications' ? 'default' : 'ghost'} 
+                  <Button
+                    variant={currentPage === 'notifications' ? 'default' : 'ghost'}
                     className="justify-start gap-2 relative"
-                    onClick={() => onNavigate?.('notifications')}
+                    onClick={() => navigate('/notifications')}
                   >
                     <Bell className="w-5 h-5" />
                     Notifications
                     <Badge className="ml-auto bg-red-500">5</Badge>
                   </Button>
                   <div className="border-t pt-4 mt-4">
-                    <div 
+                    <div
                       className="flex items-center gap-3 p-2 cursor-pointer hover:bg-gray-100 rounded-lg"
-                      onClick={() => onNavigate?.('profile')}
+                      onClick={() => navigate('/profile')}
                     >
                       <Avatar>
                         <AvatarImage src="https://images.unsplash.com/photo-1653691040409-793d2c22ed69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMHBlb3BsZXxlbnwxfHx8fDE3NjI1OTM0NzJ8MA&ixlib=rb-4.1.0&q=80&w=1080" />
@@ -202,18 +211,18 @@ export function Header({ onNavigate, onCartClick, cartItemsCount = 0, currentPag
                       </div>
                     </div>
                     <div className="mt-2 space-y-2">
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         className="w-full justify-start gap-2"
-                        onClick={() => onNavigate?.('create-product')}
+                        onClick={() => navigate('/create-product')}
                       >
                         <Plus className="w-5 h-5" />
                         Sell Product
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         className="w-full justify-start gap-2"
-                        onClick={() => onNavigate?.('settings')}
+                        onClick={() => navigate('/settings')}
                       >
                         <Settings className="w-5 h-5" />
                         Settings
