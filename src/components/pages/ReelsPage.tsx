@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
-import { Dialog, DialogContent } from '../ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 interface ReelsPageProps {
@@ -252,6 +252,10 @@ export function ReelsPage({ onNavigate, onCartClick, cartItemsCount }: ReelsPage
       {/* Upload Dialog */}
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogTitle className="sr-only">Upload Reel</DialogTitle>
+          <DialogDescription className="sr-only">
+            Upload a video reel to earn points and share with the community
+          </DialogDescription>
           <ReelUpload
             onUploadComplete={() => {
               setShowUpload(false);

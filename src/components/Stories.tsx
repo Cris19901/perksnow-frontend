@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface StoryUser {
   id: string;
@@ -87,6 +88,18 @@ export function Stories() {
     return story.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.id}`;
   };
 
+  const handleStoryClick = (story: StoryUser) => {
+    if (story.isOwn) {
+      toast.info('Create your story!', {
+        description: 'Story upload feature coming soon...'
+      });
+    } else {
+      toast.info(`View ${story.username}'s story`, {
+        description: 'Story viewer coming soon...'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
@@ -114,7 +127,11 @@ export function Stories() {
     <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
       <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
         {stories.map((story) => (
-          <div key={story.id} className="flex flex-col items-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[80px] cursor-pointer group">
+          <div
+            key={story.id}
+            className="flex flex-col items-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[80px] cursor-pointer group"
+            onClick={() => handleStoryClick(story)}
+          >
             <div className={`relative ${story.isOwn ? '' : 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'}`}>
               <div className={`${story.isOwn ? '' : 'bg-white p-[2px] rounded-full'}`}>
                 <Avatar className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-white">
