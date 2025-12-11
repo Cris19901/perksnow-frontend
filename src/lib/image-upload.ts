@@ -1,9 +1,8 @@
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { r2Client, r2Config, isR2Configured } from './r2-client';
-import { supabase } from './supabase';
 
 /**
- * Upload an image or video to R2 or Supabase Storage (fallback)
+ * Upload an image or video to Cloudflare R2
  * @param file - The file to upload
  * @param bucket - The storage bucket ('avatars', 'posts', 'products', 'videos')
  * @param userId - The user's ID for organizing files
@@ -14,6 +13,14 @@ export async function uploadImage(
   bucket: 'avatars' | 'posts' | 'products' | 'videos',
   userId: string
 ): Promise<string> {
+  // Check if R2 is configured
+  if (!isR2Configured()) {
+    throw new Error(
+      'R2 Storage is not configured. Please add R2 credentials to your environment variables. ' +
+      'See FIX_R2_BUCKET_NAME.md for setup instructions.'
+    );
+  }
+
   // Validate file type (images and videos)
   const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
   const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/avi', 'video/mov'];
@@ -30,13 +37,7 @@ export async function uploadImage(
     throw new Error(`File too large. Maximum size is ${isVideo ? '100MB' : '5MB'}`);
   }
 
-  // Use R2 if configured, otherwise fall back to Supabase
-  if (isR2Configured()) {
-    return uploadToR2(file, bucket, userId);
-  } else {
-    console.warn('R2 not configured, falling back to Supabase Storage');
-    return uploadToSupabase(file, bucket, userId);
-  }
+  return uploadToR2(file, bucket, userId);
 }
 
 /**
@@ -97,61 +98,15 @@ async function uploadToR2(
 }
 
 /**
- * Upload to Supabase Storage (fallback)
- */
-async function uploadToSupabase(
-  file: File,
-  bucket: 'avatars' | 'posts' | 'products' | 'videos',
-  userId: string
-): Promise<string> {
-  // Generate unique filename
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-  // Map bucket names for Supabase
-  const bucketMap = {
-    avatars: 'avatars',
-    posts: 'post-images',
-    products: 'product-images',
-    videos: 'videos',
-  };
-
-  const supabaseBucket = bucketMap[bucket];
-
-  // Upload to Supabase Storage
-  const { data, error } = await supabase.storage
-    .from(supabaseBucket)
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
-
-  if (error) {
-    throw new Error(`Supabase upload failed: ${error.message}`);
-  }
-
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from(supabaseBucket)
-    .getPublicUrl(data.path);
-
-  return publicUrl;
-}
-
-/**
- * Delete a file from R2 or Supabase Storage
+ * Delete a file from Cloudflare R2
  * @param url - The public URL of the file
- * @param bucket - The storage bucket
  */
-export async function deleteImage(
-  url: string,
-  bucket: 'avatars' | 'posts' | 'products' | 'videos'
-): Promise<void> {
-  if (isR2Configured() && url.includes('r2.dev')) {
-    return deleteFromR2(url);
-  } else {
-    return deleteFromSupabase(url, bucket);
+export async function deleteImage(url: string): Promise<void> {
+  if (!isR2Configured()) {
+    throw new Error('R2 Storage is not configured. Cannot delete file.');
   }
+
+  return deleteFromR2(url);
 }
 
 /**
@@ -184,40 +139,6 @@ async function deleteFromR2(url: string): Promise<void> {
   } catch (error: any) {
     console.error('R2 delete error:', error);
     throw new Error(`R2 delete failed: ${error.message}`);
-  }
-}
-
-/**
- * Delete from Supabase Storage (fallback)
- */
-async function deleteFromSupabase(
-  url: string,
-  bucket: 'avatars' | 'posts' | 'products' | 'videos'
-): Promise<void> {
-  // Map bucket names for Supabase
-  const bucketMap = {
-    avatars: 'avatars',
-    posts: 'post-images',
-    products: 'product-images',
-    videos: 'videos',
-  };
-
-  const supabaseBucket = bucketMap[bucket];
-
-  // Extract file path from URL
-  const urlParts = url.split(`/${supabaseBucket}/`);
-  if (urlParts.length < 2) {
-    throw new Error('Invalid Supabase Storage URL');
-  }
-
-  const filePath = urlParts[1];
-
-  const { error } = await supabase.storage
-    .from(supabaseBucket)
-    .remove([filePath]);
-
-  if (error) {
-    throw new Error(`Supabase delete failed: ${error.message}`);
   }
 }
 

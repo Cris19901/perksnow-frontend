@@ -162,6 +162,50 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
     }
   }, [currentIndex, reels.length]);
 
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' && currentIndex < reels.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+        setCurrentIndex(prev => prev - 1);
+      } else if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, reels.length, onClose]);
+
+  // Handle touch swipe for mobile
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStart - touchEnd > 75) {
+      // Swipe up - next reel
+      if (currentIndex < reels.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      }
+    }
+
+    if (touchStart - touchEnd < -75) {
+      // Swipe down - previous reel
+      if (currentIndex > 0) {
+        setCurrentIndex(prev => prev - 1);
+      }
+    }
+  };
+
   const handleShare = async (reel: Reel) => {
     const shareData = {
       title: `Check out this reel by ${reel.full_name}`,
@@ -222,6 +266,9 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
       <div
         ref={containerRef}
         onWheel={handleScroll}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className="fixed inset-0 bg-black z-50 overflow-hidden"
       >
         {/* Video Container */}
@@ -233,7 +280,6 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
               }
             }}
             src={currentReel.video_url}
-            loop
             muted={muted}
             playsInline
             className="w-full h-full object-contain"
@@ -243,6 +289,15 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
                 video.play();
               } else {
                 video.pause();
+              }
+            }}
+            onEnded={() => {
+              // Auto-advance to next reel when current video ends
+              if (currentIndex < reels.length - 1) {
+                setCurrentIndex(prev => prev + 1);
+              } else {
+                // If we're on the last reel, loop back to the first one
+                setCurrentIndex(0);
               }
             }}
           />
