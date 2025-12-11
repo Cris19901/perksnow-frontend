@@ -121,9 +121,14 @@ export function Stories() {
   };
 
   const handleStoryClick = (story: StoryUser) => {
-    if (story.isOwn) {
+    if (story.isOwn && story.hasStory) {
+      // If user has their own stories, view them
+      setViewingUserId(story.id);
+    } else if (story.isOwn && !story.hasStory) {
+      // If user has no stories, open upload dialog
       setShowUpload(true);
     } else if (story.hasStory) {
+      // View other users' stories
       setViewingUserId(story.id);
     }
   };
@@ -162,18 +167,20 @@ export function Stories() {
               onClick={() => handleStoryClick(story)}
             >
               <div className={`relative ${
-                story.isOwn
-                  ? ''
-                  : story.hasUnviewed
-                    ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
-                    : 'p-[3px] bg-gray-300 rounded-full'
+                story.isOwn && story.hasStory
+                  ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
+                  : story.isOwn
+                    ? ''
+                    : story.hasUnviewed
+                      ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
+                      : 'p-[3px] bg-gray-300 rounded-full'
               }`}>
-                <div className={`${story.isOwn ? '' : 'bg-white p-[2px] rounded-full'}`}>
+                <div className={`${(story.isOwn && story.hasStory) || !story.isOwn ? 'bg-white p-[2px] rounded-full' : ''}`}>
                   <Avatar className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-white">
                     <AvatarImage src={getAvatarUrl(story)} />
                     <AvatarFallback>{(story.full_name || story.username || 'U')[0].toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  {story.isOwn && (
+                  {story.isOwn && !story.hasStory && (
                     <div className="absolute bottom-0 right-0 w-4 h-4 sm:w-5 sm:h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white">
                       <Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                     </div>
