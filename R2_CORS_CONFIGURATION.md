@@ -3,7 +3,7 @@
 ## 🚨 Error You're Seeing
 
 ```
-Access to fetch at 'https://socialhub-uploads.r2.cloudflarestorage.com/...' from origin 'https://beta.perksnow.biz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+Access to fetch at 'https://perksnow-media-dev.r2.cloudflarestorage.com/...' from origin 'https://beta.perksnow.biz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
 This error occurs because your R2 bucket doesn't have CORS (Cross-Origin Resource Sharing) configured to allow uploads from your website.
@@ -20,7 +20,7 @@ This error occurs because your R2 bucket doesn't have CORS (Cross-Origin Resourc
 
 ### Step 2: Find Your R2 Bucket
 
-1. You should see your bucket listed (probably named `socialhub-uploads` or similar)
+1. You should see your bucket listed (named `perksnow-media-dev`)
 2. Click on the bucket name to open it
 
 ### Step 3: Configure CORS Settings

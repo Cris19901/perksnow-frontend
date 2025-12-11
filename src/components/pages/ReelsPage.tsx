@@ -3,7 +3,7 @@ import { Header } from '../Header';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { ReelUpload } from '../ReelUpload';
 import { ReelsViewer } from '../ReelsViewer';
-import { PlaySquare, Upload, Play, Eye, Heart, MessageCircle, Plus } from 'lucide-react';
+import { PlaySquare, Upload, Play, Eye, Heart, MessageCircle, Plus, Maximize2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -108,16 +108,28 @@ export function ReelsPage({ onNavigate, onCartClick, cartItemsCount }: ReelsPage
               </p>
             </div>
 
-            {/* Upload Button */}
-            {user && (
-              <Button
-                onClick={() => setShowUpload(true)}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Upload Reel
-              </Button>
-            )}
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {reels.length > 0 && (
+                <Button
+                  onClick={() => setShowViewer(true)}
+                  variant="outline"
+                  className="hidden sm:flex"
+                >
+                  <Maximize2 className="w-4 h-4 mr-2" />
+                  Watch All
+                </Button>
+              )}
+              {user && (
+                <Button
+                  onClick={() => setShowUpload(true)}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Upload
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Info Card */}
@@ -243,6 +255,17 @@ export function ReelsPage({ onNavigate, onCartClick, cartItemsCount }: ReelsPage
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Floating Watch All Button (Mobile Only) */}
+          {!loading && reels.length > 0 && (
+            <Button
+              onClick={() => setShowViewer(true)}
+              className="fixed bottom-24 right-4 sm:hidden bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg z-10 rounded-full w-14 h-14 p-0"
+              size="lg"
+            >
+              <Maximize2 className="w-6 h-6" />
+            </Button>
           )}
         </div>
       </div>
