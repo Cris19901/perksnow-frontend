@@ -280,7 +280,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {user?.id === storyGroup.user_id && (
               <Button
                 variant="ghost"
@@ -289,7 +289,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
                   e.stopPropagation();
                   setShowUpload(true);
                 }}
-                className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
+                className="text-white bg-blue-600 hover:bg-blue-700 rounded-full p-2.5 transition-all hover:scale-110 shadow-lg"
                 title="Add to your story"
               >
                 <Plus className="w-5 h-5" />
@@ -302,7 +302,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
                 e.stopPropagation();
                 onClose();
               }}
-              className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
+              className="text-white hover:bg-white/20 rounded-full p-2.5 transition-all hover:scale-110"
             >
               <X className="w-5 h-5" />
             </Button>
