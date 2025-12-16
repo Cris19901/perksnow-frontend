@@ -121,77 +121,126 @@ export function Stories() {
   };
 
   const handleStoryClick = (story: StoryUser) => {
-    if (story.isOwn && story.hasStory) {
-      // If user has their own stories, view them
-      setViewingUserId(story.id);
-    } else if (story.isOwn && !story.hasStory) {
+    if (story.isOwn && !story.hasStory) {
       // If user has no stories, open upload dialog
       setShowUpload(true);
     } else if (story.hasStory) {
-      // View other users' stories
+      // View stories (own or others)
       setViewingUserId(story.id);
     }
   };
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex flex-col items-center gap-2 flex-shrink-0">
-              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gray-200 animate-pulse" />
-              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
-            </div>
-          ))}
+      <>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-gray-800">Stories</h3>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-all hover:scale-105 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Story</span>
+            </button>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex flex-col items-center gap-2 flex-shrink-0">
+                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gray-200 animate-pulse" />
+                <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+
+        <StoryUpload
+          open={showUpload}
+          onOpenChange={setShowUpload}
+          onSuccess={fetchStories}
+        />
+      </>
     );
   }
 
   if (stories.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <p className="text-gray-500 text-sm text-center">No stories yet</p>
-      </div>
+      <>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-gray-800">Stories</h3>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-all hover:scale-105 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Story</span>
+            </button>
+          </div>
+          <p className="text-gray-500 text-sm text-center py-4">No stories yet. Be the first to share!</p>
+        </div>
+
+        <StoryUpload
+          open={showUpload}
+          onOpenChange={setShowUpload}
+          onSuccess={fetchStories}
+        />
+      </>
     );
   }
 
   return (
     <>
       <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <h3 className="text-sm font-semibold text-gray-800">Stories</h3>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-all hover:scale-105 shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Story</span>
+          </button>
+        </div>
+
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-          {stories.map((story) => (
-            <div
-              key={story.id}
-              className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group transition-transform hover:scale-105"
-              onClick={() => handleStoryClick(story)}
-            >
-              <div className={`relative ${
-                story.isOwn && story.hasStory
-                  ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
-                  : story.isOwn
-                    ? ''
-                    : story.hasUnviewed
-                      ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
-                      : 'p-[3px] bg-gray-300 rounded-full'
-              }`}>
-                <div className={`${(story.isOwn && story.hasStory) || !story.isOwn ? 'bg-white p-[2px] rounded-full' : ''}`}>
-                  <Avatar className="w-16 h-16 sm:w-18 sm:h-18 border-2 border-white ring-0">
-                    <AvatarImage src={getAvatarUrl(story)} alt={story.username} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-400 to-purple-500 text-white font-semibold">
-                      {(story.full_name || story.username || 'U')[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  {story.isOwn && !story.hasStory && (
-                    <div className="absolute bottom-0 right-0 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
-                      <Plus className="w-3 h-3 text-white" />
-                    </div>
-                  )}
+          {stories.map((story, index) => (
+            <div key={story.id}>
+              {/* Add separator after "Your Story" */}
+              {index === 1 && (
+                <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 -ml-2" />
+              )}
+
+              <div
+                className={`flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group transition-transform hover:scale-105 ${
+                  story.isOwn ? 'pr-4 mr-2 border-r-2 border-gray-100' : ''
+                }`}
+                onClick={() => handleStoryClick(story)}
+              >
+                <div className={`relative ${
+                  story.isOwn && story.hasStory
+                    ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
+                    : story.isOwn
+                      ? 'p-[3px] bg-blue-500 rounded-full'
+                      : story.hasUnviewed
+                        ? 'p-[3px] bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full'
+                        : 'p-[3px] bg-gray-300 rounded-full'
+                }`}>
+                  <div className="bg-white p-[2px] rounded-full">
+                    <Avatar className="w-16 h-16 sm:w-18 sm:h-18 border-2 border-white ring-0">
+                      <AvatarImage src={getAvatarUrl(story)} alt={story.username} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-400 to-purple-500 text-white font-semibold">
+                        {(story.full_name || story.username || 'U')[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
                 </div>
+                <span className={`text-xs text-center max-w-[80px] truncate font-medium ${
+                  story.isOwn ? 'text-blue-600 font-semibold' : 'text-gray-700'
+                }`}>
+                  {story.isOwn ? 'Your Story' : story.username}
+                </span>
               </div>
-              <span className="text-xs text-center max-w-[80px] truncate font-medium text-gray-700">
-                {story.isOwn ? 'Your Story' : story.username}
-              </span>
             </div>
           ))}
         </div>
