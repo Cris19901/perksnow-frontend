@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '../Header';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -7,10 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Post } from '../Post';
 import { ProductCard } from '../ProductCard';
 import { MobileBottomNav } from '../MobileBottomNav';
-import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart } from 'lucide-react';
+import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/r2';
+import { toast } from 'sonner';
 
 interface ProfilePageProps {
   onNavigate?: (page: string) => void;
@@ -27,6 +29,10 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     console.log('🔍 ProfilePage: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
@@ -107,6 +113,96 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploadingAvatar(true);
+      toast.loading('Uploading profile picture...');
+
+      // Upload to R2
+      const avatarUrl = await uploadImage(file, 'avatars', user.id);
+
+      // Update user profile
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setProfile({ ...profile, avatar_url: avatarUrl });
+      toast.dismiss();
+      toast.success('Profile picture updated!');
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      toast.dismiss();
+      toast.error('Failed to upload profile picture');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be less than 10MB');
+      return;
+    }
+
+    try {
+      setUploadingCover(true);
+      toast.loading('Uploading cover photo...');
+
+      // Upload to R2
+      const coverUrl = await uploadImage(file, 'covers', user.id);
+
+      // Update user profile
+      const { error } = await supabase
+        .from('users')
+        .update({ cover_image_url: coverUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setProfile({ ...profile, cover_image_url: coverUrl });
+      toast.dismiss();
+      toast.success('Cover photo updated!');
+    } catch (error: any) {
+      console.error('Error uploading cover:', error);
+      toast.dismiss();
+      toast.error('Failed to upload cover photo');
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  };
+
   // Show error state
   if (error) {
     return (
@@ -185,7 +281,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
       <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
         {/* Cover Photo */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
-          <div className="h-48 sm:h-64 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 relative">
+          <div className="h-48 sm:h-64 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 relative group">
             {profile.cover_image_url ? (
               <ImageWithFallback
                 src={profile.cover_image_url}
@@ -195,14 +291,66 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
             ) : (
               <div className="w-full h-full bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400" />
             )}
+
+            {/* Upload Cover Photo Button */}
+            {isOwnProfile && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleCoverUpload}
+                />
+                <button
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="absolute bottom-4 right-4 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg backdrop-blur-sm transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                  title="Change cover photo"
+                >
+                  {uploadingCover ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <Camera className="w-5 h-5" />
+                  )}
+                </button>
+              </>
+            )}
           </div>
 
           <div className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-16 sm:-mt-20">
-              <Avatar className="w-32 h-32 sm:w-40 sm:h-40 border-4 border-white shadow-lg">
-                <AvatarImage src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id}`} />
-                <AvatarFallback>{profile.full_name?.substring(0, 2).toUpperCase() || profile.username?.substring(0, 2).toUpperCase() || 'U'}</AvatarFallback>
-              </Avatar>
+              <div className="relative group">
+                <Avatar className="w-32 h-32 sm:w-40 sm:h-40 border-4 border-white shadow-lg">
+                  <AvatarImage src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id}`} />
+                  <AvatarFallback>{profile.full_name?.substring(0, 2).toUpperCase() || profile.username?.substring(0, 2).toUpperCase() || 'U'}</AvatarFallback>
+                </Avatar>
+
+                {/* Upload Avatar Button */}
+                {isOwnProfile && (
+                  <>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="absolute bottom-1 right-1 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all hover:scale-110"
+                      title="Change profile picture"
+                    >
+                      {uploadingAvatar ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
 
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

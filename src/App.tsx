@@ -15,6 +15,7 @@ import { CreateProductPage } from './components/pages/CreateProductPage';
 import { CheckoutPage } from './components/pages/CheckoutPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import { ReelsPage } from './components/pages/ReelsPage';
+import { PointsPage } from './components/pages/PointsPage';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { toast, Toaster } from 'sonner@2.0.3';
@@ -302,6 +303,17 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <ReelsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/points"
+          element={
+            <ProtectedRoute>
+              <PointsPage
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />
