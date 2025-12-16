@@ -41,6 +41,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
   const [showUpload, setShowUpload] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const trackedViewsRef = useRef<Set<string>>(new Set()); // Track which stories have been viewed
 
   useEffect(() => {
     fetchUserStories();
@@ -108,10 +109,12 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
 
     setProgress(0);
 
-    // Track view after 1 second
-    setTimeout(() => {
-      trackView(currentStory.story_id);
-    }, 1000);
+    // Track view after 1 second (only if not already tracked)
+    if (!trackedViewsRef.current.has(currentStory.story_id)) {
+      setTimeout(() => {
+        trackView(currentStory.story_id);
+      }, 1000);
+    }
 
     if (currentStory.media_type === 'video') {
       // For videos, progress is controlled by video playback
@@ -144,24 +147,32 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
   const trackView = async (storyId: string) => {
     if (!user) return;
 
+    // Check if already tracked in this session
+    if (trackedViewsRef.current.has(storyId)) return;
+
+    // Mark as tracked immediately to prevent duplicate calls
+    trackedViewsRef.current.add(storyId);
+
     try {
-      await supabase.from('story_views').insert({
+      const { error } = await supabase.from('story_views').insert({
         story_id: storyId,
         user_id: user.id
       });
 
-      // Update local state
-      setStoryGroup(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          stories: prev.stories.map(s =>
-            s.story_id === storyId
-              ? { ...s, is_viewed: true, views_count: s.views_count + 1 }
-              : s
-          )
-        };
-      });
+      // Only update view count if insert was successful (not a duplicate)
+      if (!error) {
+        setStoryGroup(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            stories: prev.stories.map(s =>
+              s.story_id === storyId
+                ? { ...s, is_viewed: true, views_count: s.views_count + 1 }
+                : s
+            )
+          };
+        });
+      }
     } catch (err) {
       // Silently fail - view might already be tracked
       console.log('View tracking:', err);
@@ -197,6 +208,11 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Prevent handling if clicking on buttons or interactive elements
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const clickPosition = x / rect.width;
@@ -208,8 +224,8 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
     } else {
       setIsPaused(prev => !prev);
       if (videoRef.current) {
-        if (videoRef.current.paused) {
-          videoRef.current.play();
+        if (isPaused) {
+          videoRef.current.play().catch(() => {});
         } else {
           videoRef.current.pause();
         }
@@ -269,7 +285,10 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowUpload(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowUpload(true);
+                }}
                 className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
                 title="Add to your story"
               >
@@ -279,7 +298,10 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
             >
               <X className="w-5 h-5" />
@@ -311,11 +333,23 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
         )}
       </div>
 
-      {/* Navigation Hints */}
-      <div className="absolute inset-0 pointer-events-none flex">
-        <div className="w-1/3 h-full" />
-        <div className="w-1/3 h-full" />
-        <div className="w-1/3 h-full" />
+      {/* Mobile Navigation Indicators - show on first few taps */}
+      <div className="md:hidden absolute inset-0 pointer-events-none flex">
+        {currentStoryIndex > 0 && (
+          <div className="w-1/3 h-full flex items-center justify-start pl-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full p-2 animate-pulse">
+              <ChevronLeft className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        )}
+        <div className="flex-1 h-full" />
+        {currentStoryIndex < storyGroup.stories.length - 1 && (
+          <div className="w-1/3 h-full flex items-center justify-end pr-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full p-2 animate-pulse">
+              <ChevronRight className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Desktop Navigation Arrows */}
@@ -324,7 +358,10 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={previousStory}
+            onClick={(e) => {
+              e.stopPropagation();
+              previousStory();
+            }}
             className="pointer-events-auto text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full p-3 shadow-xl transition-all hover:scale-110"
           >
             <ChevronLeft className="w-6 h-6" />
@@ -335,7 +372,10 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={nextStory}
+            onClick={(e) => {
+              e.stopPropagation();
+              nextStory();
+            }}
             className="pointer-events-auto text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full p-3 shadow-xl transition-all hover:scale-110"
           >
             <ChevronRight className="w-6 h-6" />
