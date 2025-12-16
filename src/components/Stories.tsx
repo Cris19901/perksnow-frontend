@@ -135,12 +135,12 @@ export function Stories() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex flex-col items-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[80px]">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-200 animate-pulse" />
-              <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
+            <div key={i} className="flex flex-col items-center gap-2 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gray-200 animate-pulse" />
+              <div className="w-14 h-3 bg-gray-200 rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -150,7 +150,7 @@ export function Stories() {
 
   if (stories.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
         <p className="text-gray-500 text-sm text-center">No stories yet</p>
       </div>
     );
@@ -158,12 +158,12 @@ export function Stories() {
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
           {stories.map((story) => (
             <div
               key={story.id}
-              className="flex flex-col items-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[80px] cursor-pointer group"
+              className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group transition-transform hover:scale-105"
               onClick={() => handleStoryClick(story)}
             >
               <div className={`relative ${
@@ -176,18 +176,20 @@ export function Stories() {
                       : 'p-[3px] bg-gray-300 rounded-full'
               }`}>
                 <div className={`${(story.isOwn && story.hasStory) || !story.isOwn ? 'bg-white p-[2px] rounded-full' : ''}`}>
-                  <Avatar className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-white">
-                    <AvatarImage src={getAvatarUrl(story)} />
-                    <AvatarFallback>{(story.full_name || story.username || 'U')[0].toUpperCase()}</AvatarFallback>
+                  <Avatar className="w-16 h-16 sm:w-18 sm:h-18 border-2 border-white ring-0">
+                    <AvatarImage src={getAvatarUrl(story)} alt={story.username} />
+                    <AvatarFallback className="bg-gradient-to-br from-blue-400 to-purple-500 text-white font-semibold">
+                      {(story.full_name || story.username || 'U')[0].toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   {story.isOwn && !story.hasStory && (
-                    <div className="absolute bottom-0 right-0 w-4 h-4 sm:w-5 sm:h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white">
-                      <Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                    <div className="absolute bottom-0 right-0 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                      <Plus className="w-3 h-3 text-white" />
                     </div>
                   )}
                 </div>
               </div>
-              <span className="text-xs text-center max-w-[70px] sm:max-w-[80px] truncate">
+              <span className="text-xs text-center max-w-[80px] truncate font-medium text-gray-700">
                 {story.isOwn ? 'Your Story' : story.username}
               </span>
             </div>

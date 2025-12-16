@@ -23,7 +23,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
@@ -45,16 +45,17 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
 
     // Validate video duration (max 60 seconds)
     if (isVideo) {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        window.URL.revokeObjectURL(video.src);
-        if (video.duration > 60) {
+      try {
+        const duration = await getVideoDuration(selectedFile);
+        if (duration > 60) {
           toast.error('Video must be 60 seconds or less');
           return;
         }
-      };
-      video.src = URL.createObjectURL(selectedFile);
+      } catch (err) {
+        console.error('Error validating video:', err);
+        toast.error('Failed to validate video. Please try another file.');
+        return;
+      }
     }
 
     setFile(selectedFile);

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, User, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
+import { StoryUpload } from './StoryUpload';
 
 interface Story {
   story_id: string;
@@ -37,6 +38,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -226,13 +228,13 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
   const currentStory = storyGroup.stories[currentStoryIndex];
 
   return (
-    <div className="fixed inset-0 bg-black z-50">
+    <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
       {/* Progress Bars */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex gap-1 p-2">
+      <div className="absolute top-0 left-0 right-0 z-10 flex gap-1.5 p-3 bg-gradient-to-b from-black/40 to-transparent">
         {storyGroup.stories.map((_, index) => (
-          <div key={index} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
+          <div key={index} className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden shadow-sm">
             <div
-              className="h-full bg-white transition-all duration-100"
+              className="h-full bg-white transition-all duration-100 shadow-lg"
               style={{
                 width: index < currentStoryIndex ? '100%' : index === currentStoryIndex ? `${progress}%` : '0%'
               }}
@@ -242,18 +244,18 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
       </div>
 
       {/* Header */}
-      <div className="absolute top-4 left-0 right-0 z-10 px-4">
+      <div className="absolute top-0 left-0 right-0 z-10 px-4 pt-12 pb-4 bg-gradient-to-b from-black/60 via-black/30 to-transparent">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Avatar className="w-10 h-10 border-2 border-white">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-10 h-10 border-2 border-white shadow-xl ring-2 ring-white/20">
               <AvatarImage src={storyGroup.avatar_url} />
-              <AvatarFallback>
+              <AvatarFallback className="bg-gradient-to-br from-blue-400 to-purple-500 text-white">
                 <User className="w-5 h-5" />
               </AvatarFallback>
             </Avatar>
             <div className="text-white">
-              <p className="font-semibold text-sm">{storyGroup.full_name}</p>
-              <p className="text-xs opacity-70">
+              <p className="font-semibold text-sm drop-shadow-lg">{storyGroup.full_name}</p>
+              <p className="text-xs opacity-90 drop-shadow-md">
                 {new Date(currentStory.created_at).toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit'
@@ -262,14 +264,27 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="text-white hover:bg-white/20"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {user?.id === storyGroup.user_id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowUpload(true)}
+                className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
+                title="Add to your story"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="text-white hover:bg-white/20 rounded-full p-2 transition-all hover:scale-110"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -304,13 +319,13 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
       </div>
 
       {/* Desktop Navigation Arrows */}
-      <div className="hidden md:flex absolute inset-0 items-center justify-between px-4 pointer-events-none">
+      <div className="hidden md:flex absolute inset-0 items-center justify-between px-6 pointer-events-none">
         {currentStoryIndex > 0 && (
           <Button
             variant="ghost"
             size="sm"
             onClick={previousStory}
-            className="pointer-events-auto text-white bg-black/30 hover:bg-black/50 rounded-full"
+            className="pointer-events-auto text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full p-3 shadow-xl transition-all hover:scale-110"
           >
             <ChevronLeft className="w-6 h-6" />
           </Button>
@@ -321,7 +336,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
             variant="ghost"
             size="sm"
             onClick={nextStory}
-            className="pointer-events-auto text-white bg-black/30 hover:bg-black/50 rounded-full"
+            className="pointer-events-auto text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full p-3 shadow-xl transition-all hover:scale-110"
           >
             <ChevronRight className="w-6 h-6" />
           </Button>
@@ -330,11 +345,36 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
 
       {/* View Count (for own stories) */}
       {user?.id === storyGroup.user_id && (
-        <div className="absolute bottom-4 left-4 right-4 z-10">
-          <div className="bg-black/50 backdrop-blur-sm rounded-lg p-3 text-white text-center">
-            <p className="text-sm font-medium">{currentStory.views_count} views</p>
+        <div className="absolute bottom-6 left-6 right-6 z-10">
+          <div className="bg-gradient-to-r from-black/60 to-black/40 backdrop-blur-md rounded-2xl px-4 py-3 text-white text-center shadow-2xl border border-white/10">
+            <p className="text-sm font-semibold drop-shadow-lg">
+              👁️ {currentStory.views_count} {currentStory.views_count === 1 ? 'view' : 'views'}
+            </p>
           </div>
         </div>
+      )}
+
+      {/* Pause Indicator */}
+      {isPaused && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+          <div className="bg-black/60 backdrop-blur-sm rounded-full p-6 shadow-2xl">
+            <div className="flex gap-2">
+              <div className="w-2 h-8 bg-white rounded-full"></div>
+              <div className="w-2 h-8 bg-white rounded-full"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Story Upload Dialog */}
+      {showUpload && (
+        <StoryUpload
+          open={showUpload}
+          onOpenChange={setShowUpload}
+          onSuccess={() => {
+            fetchUserStories(); // Refresh stories after upload
+          }}
+        />
       )}
     </div>
   );
