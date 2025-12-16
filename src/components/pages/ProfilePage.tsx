@@ -305,7 +305,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                 <button
                   onClick={() => coverInputRef.current?.click()}
                   disabled={uploadingCover}
-                  className="absolute bottom-4 right-4 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg backdrop-blur-sm transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                  className="absolute top-4 right-4 p-3 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-lg backdrop-blur-sm transition-all hover:scale-110"
                   title="Change cover photo"
                 >
                   {uploadingCover ? (
@@ -320,7 +320,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
 
           <div className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-16 sm:-mt-20">
-              <div className="relative group">
+              <div className="relative">
                 <Avatar className="w-32 h-32 sm:w-40 sm:h-40 border-4 border-white shadow-lg">
                   <AvatarImage src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id}`} />
                   <AvatarFallback>{profile.full_name?.substring(0, 2).toUpperCase() || profile.username?.substring(0, 2).toUpperCase() || 'U'}</AvatarFallback>
@@ -339,13 +339,13 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                     <button
                       onClick={() => avatarInputRef.current?.click()}
                       disabled={uploadingAvatar}
-                      className="absolute bottom-1 right-1 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all hover:scale-110"
+                      className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all hover:scale-110"
                       title="Change profile picture"
                     >
                       {uploadingAvatar ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white"></div>
                       ) : (
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                       )}
                     </button>
                   </>
