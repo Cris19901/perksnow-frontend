@@ -12,11 +12,14 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownRight,
-  Sparkles
+  Sparkles,
+  DollarSign,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { WithdrawalModal } from '../WithdrawalModal';
 
 interface PointsPageProps {
   onNavigate?: (page: string) => void;
@@ -32,11 +35,33 @@ interface Transaction {
   created_at: string;
 }
 
+interface WithdrawalRequest {
+  id: string;
+  amount_points: number;
+  amount_currency: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  withdrawal_method: string;
+  account_details: {
+    currency?: string;
+    phoneNumber?: string;
+    email?: string;
+    accountName?: string;
+    accountNumber?: string;
+    bankName?: string;
+    country?: string;
+  };
+  created_at: string;
+  updated_at: string;
+  admin_notes: string | null;
+}
+
 export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPageProps) {
   const { user } = useAuth();
   const [points, setPoints] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -69,6 +94,21 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
       if (transError) throw transError;
       setTransactions(transactionsData || []);
 
+      // Fetch withdrawal requests
+      const { data: withdrawalsData, error: withdrawError } = await supabase
+        .from('withdrawal_requests')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (withdrawError) {
+        // Don't throw error if table doesn't exist yet, just log it
+        console.log('Note: withdrawal_requests table may not exist yet:', withdrawError);
+      } else {
+        setWithdrawals(withdrawalsData || []);
+      }
+
     } catch (error: any) {
       console.error('Error fetching points data:', error);
       toast.error('Failed to load points data');
@@ -97,6 +137,21 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'approved':
+      case 'completed':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'rejected':
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 border-red-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
   };
 
   if (loading) {
@@ -139,6 +194,13 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
           <div className="mb-6">
             <p className="text-4xl sm:text-5xl font-bold mb-2">{points.toLocaleString()}</p>
             <p className="text-white/80 text-sm">Total Points Balance</p>
+            <Button
+              onClick={() => setShowWithdrawalModal(true)}
+              className="mt-4 bg-white/20 hover:bg-white/30 text-white border border-white/40 backdrop-blur-sm"
+            >
+              <DollarSign className="w-4 h-4 mr-2" />
+              Request Withdrawal
+            </Button>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -257,7 +319,67 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
             </div>
           )}
         </Card>
+
+        {/* Withdrawal Requests History */}
+        {withdrawals.length > 0 && (
+          <Card className="p-6 mt-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-purple-600" />
+              Withdrawal Requests
+            </h3>
+
+            <div className="space-y-3">
+              {withdrawals.map((withdrawal) => (
+                <div
+                  key={withdrawal.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-semibold text-sm">
+                        {withdrawal.amount_points.toLocaleString()} points
+                      </p>
+                      <span className="text-gray-400">→</span>
+                      <p className="text-sm text-gray-600 font-semibold">
+                        {withdrawal.amount_currency.toFixed(2)} {withdrawal.account_details?.currency || 'NGN'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                      <span className="capitalize">{withdrawal.withdrawal_method.replace('_', ' ')}</span>
+                      <span>•</span>
+                      <span>{formatDate(withdrawal.created_at)}</span>
+                    </div>
+                    {withdrawal.account_details?.accountName && (
+                      <p className="text-xs text-gray-600">
+                        {withdrawal.account_details.accountName}
+                        {withdrawal.account_details.bankName && ` • ${withdrawal.account_details.bankName}`}
+                      </p>
+                    )}
+                    {withdrawal.admin_notes && (
+                      <p className="text-xs text-gray-600 mt-2 p-2 bg-white rounded border border-gray-200">
+                        <span className="font-semibold">Admin Note:</span> {withdrawal.admin_notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="ml-4">
+                    <Badge className={`${getStatusBadgeColor(withdrawal.status)} border`}>
+                      {withdrawal.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
+
+      <WithdrawalModal
+        open={showWithdrawalModal}
+        onOpenChange={setShowWithdrawalModal}
+        currentBalance={points}
+        onSuccess={fetchPointsData}
+      />
 
       <MobileBottomNav currentPage="points" onNavigate={onNavigate} />
     </div>
