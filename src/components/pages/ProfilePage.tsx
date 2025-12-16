@@ -11,7 +11,7 @@ import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Came
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/r2';
+import { uploadImage } from '@/lib/image-upload';
 import { toast } from 'sonner';
 
 interface ProfilePageProps {
