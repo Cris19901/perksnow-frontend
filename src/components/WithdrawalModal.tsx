@@ -16,9 +16,9 @@ interface WithdrawalModalProps {
   onSuccess?: () => void;
 }
 
-// Conversion rate: 1 point = 10 NGN
-const POINTS_TO_NGN = 10;
-const MIN_WITHDRAWAL_POINTS = 20000; // Minimum 20,000 points (= 200,000 NGN)
+// Conversion rate: 10 points = 1 NGN
+const POINTS_TO_NGN = 0.1; // 1 point = 0.1 NGN (or 10 points = 1 NGN)
+const MIN_WITHDRAWAL_POINTS = 20000; // Minimum 20,000 points (= 2,000 NGN)
 const WITHDRAWAL_FREQUENCY_DAYS = 15; // Can withdraw once every 15 days
 
 export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess }: WithdrawalModalProps) {
@@ -359,7 +359,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
                     {points.toLocaleString()} points = {currencyAmount} {selectedCurrency}
                   </p>
                   <p className="text-xs text-green-600 mt-1">
-                    Rate: 1 point = {POINTS_TO_NGN} NGN
+                    Rate: 10 points = 1 NGN
                     {selectedCurrency !== 'NGN' && exchangeRates && ` → ${selectedCurrency}`}
                   </p>
                 </div>
@@ -523,8 +523,8 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
               <ul className="list-disc list-inside space-y-1">
                 <li>Withdrawals are processed manually within 3-5 business days</li>
                 <li>You can request a withdrawal once every {WITHDRAWAL_FREQUENCY_DAYS} days</li>
-                <li>Minimum withdrawal: {MIN_WITHDRAWAL_POINTS.toLocaleString()} points</li>
-                <li>Conversion rate: 1 point = {POINTS_TO_NGN} NGN</li>
+                <li>Minimum withdrawal: {MIN_WITHDRAWAL_POINTS.toLocaleString()} points (= {(MIN_WITHDRAWAL_POINTS * POINTS_TO_NGN).toLocaleString()} NGN)</li>
+                <li>Conversion rate: 10 points = 1 NGN</li>
                 <li>You'll be notified via email once your request is processed</li>
               </ul>
             </div>

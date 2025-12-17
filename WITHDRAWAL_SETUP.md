@@ -4,9 +4,9 @@ This guide explains how to set up and use the Points Conversion and Withdrawal s
 
 ## Features
 
-- **Conversion Rate**: 1 point = 10 NGN
+- **Conversion Rate**: 10 points = 1 NGN
 - **Currency Support**: NGN, USD, EUR, GBP (with real-time exchange rates)
-- **Minimum Withdrawal**: 20,000 points (= 200,000 NGN)
+- **Minimum Withdrawal**: 20,000 points (= 2,000 NGN)
 - **Withdrawal Frequency**: Once every 15 days
 - **Withdrawal Methods**: Bank Transfer, Opay
 - **Processing**: Manual review by admin team (3-5 business days)
@@ -99,14 +99,14 @@ The function will:
 The system uses the [ExchangeRate-API](https://www.exchangerate-api.com/) free tier to fetch real-time exchange rates from NGN to other currencies.
 
 **Conversion Flow**:
-1. Points → NGN (1 point = 10 NGN)
+1. Points → NGN (10 points = 1 NGN, or 1 point = 0.1 NGN)
 2. NGN → Selected Currency (using live exchange rates)
 
 Example:
 - User has 50,000 points
 - Selects USD
-- Calculation: 50,000 × 10 = 500,000 NGN
-- If 1 USD = 1,500 NGN, then 500,000 ÷ 1,500 = 333.33 USD
+- Calculation: 50,000 × 0.1 = 5,000 NGN
+- If 1 USD = 1,500 NGN, then 5,000 ÷ 1,500 = 3.33 USD
 
 ## Withdrawal Request Status
 
