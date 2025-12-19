@@ -42,6 +42,8 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
   const [eligibilityChecking, setEligibilityChecking] = useState(false);
   const [canWithdraw, setCanWithdraw] = useState(true);
   const [nextWithdrawalDate, setNextWithdrawalDate] = useState<string | null>(null);
+  const [hasActiveMembership, setHasActiveMembership] = useState(false);
+  const [ineligibilityReason, setIneligibilityReason] = useState<string>('');
 
   const points = parseInt(pointsToWithdraw) || 0;
   const ngnAmount = points * POINTS_TO_NGN;
@@ -90,6 +92,28 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
     try {
       setEligibilityChecking(true);
 
+      // Check for active membership
+      const { data: activeSub, error: subError } = await supabase
+        .from('user_subscriptions')
+        .select('id, end_date, status')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .gt('end_date', new Date().toISOString())
+        .single();
+
+      if (subError && subError.code !== 'PGRST116') {
+        console.log('Note: user_subscriptions table may not exist yet');
+        // If table doesn't exist, allow withdrawal for now
+        setHasActiveMembership(true);
+      } else if (!activeSub) {
+        setCanWithdraw(false);
+        setHasActiveMembership(false);
+        setIneligibilityReason('You need an active membership to request withdrawals');
+        return;
+      } else {
+        setHasActiveMembership(true);
+      }
+
       // Check last withdrawal date
       const { data: lastWithdrawal, error } = await supabase
         .from('withdrawal_requests')
@@ -122,6 +146,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
             day: 'numeric',
             year: 'numeric'
           }));
+          setIneligibilityReason(`You can request another withdrawal on ${nextDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
           return;
         }
       }
@@ -294,13 +319,31 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
             <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
             <h3 className="text-lg font-semibold mb-2">Withdrawal Not Available</h3>
             <p className="text-gray-600 mb-4">
-              You can request another withdrawal on <span className="font-semibold">{nextWithdrawalDate}</span>
+              {ineligibilityReason || 'You are not eligible for withdrawal at this time'}
             </p>
-            <p className="text-sm text-gray-500">
-              Withdrawals are allowed once every {WITHDRAWAL_FREQUENCY_DAYS} days
-            </p>
+            {!hasActiveMembership ? (
+              <>
+                <p className="text-sm text-gray-500 mb-4">
+                  Subscribe to a membership plan to unlock withdrawal features
+                </p>
+                <Button
+                  onClick={() => {
+                    onOpenChange(false);
+                    // TODO: Navigate to subscription page
+                  }}
+                  className="mt-2 bg-purple-600 hover:bg-purple-700"
+                >
+                  View Membership Plans
+                </Button>
+              </>
+            ) : nextWithdrawalDate ? (
+              <p className="text-sm text-gray-500">
+                Withdrawals are allowed once every {WITHDRAWAL_FREQUENCY_DAYS} days
+              </p>
+            ) : null}
             <Button
               onClick={() => onOpenChange(false)}
+              variant="outline"
               className="mt-4"
             >
               Close
