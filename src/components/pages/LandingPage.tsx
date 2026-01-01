@@ -15,9 +15,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                <span className="text-white">S</span>
+                <span className="text-white font-bold">L</span>
               </div>
-              <span className="text-lg sm:text-xl">SocialHub</span>
+              <span className="text-lg sm:text-xl font-semibold">LavLay</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
               <Button variant="ghost" onClick={() => onNavigate('about')} className="hidden sm:inline-flex">
@@ -43,7 +43,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
           <div className="space-y-4 sm:space-y-6">
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl">
-              Connect, Share & Shop with SocialHub
+              Connect, Share & Shop with LavLay
             </h1>
             <p className="text-base sm:text-lg md:text-xl text-gray-600">
               The social commerce platform where you can connect with friends, discover communities, and buy & sell products - all in one place.
@@ -150,7 +150,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl mb-4 sm:mb-6">Ready to get started?</h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-6 sm:mb-8">
-            Join millions of users already connecting and shopping on SocialHub
+            Join millions of users already connecting and shopping on LavLay
           </p>
           <Button 
             size="lg" 
@@ -169,9 +169,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-sm">S</span>
+                  <span className="text-white text-sm font-bold">L</span>
                 </div>
-                <span>SocialHub</span>
+                <span className="font-semibold">LavLay</span>
               </div>
               <p className="text-sm text-gray-600">
                 Connecting people and communities worldwide.
@@ -203,7 +203,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
           <div className="border-t border-gray-200 mt-8 pt-8 text-center text-sm text-gray-600">
-            © 2025 SocialHub. All rights reserved.
+            © 2025 LavLay. All rights reserved.
           </div>
         </div>
       </footer>

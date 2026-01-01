@@ -193,7 +193,7 @@ export function Sidebar() {
           <span>·</span>
           <a href="#" className="hover:underline">Terms</a>
         </div>
-        <p>© 2025 SocialHub</p>
+        <p>© 2025 LavLay</p>
       </div>
     </div>
   );
