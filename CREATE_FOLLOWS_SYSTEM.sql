@@ -229,7 +229,6 @@ USING (auth.uid() = follower_id);
 
 -- Grant access to authenticated users
 GRANT SELECT, INSERT, DELETE ON follows TO authenticated;
-GRANT USAGE ON SEQUENCE follows_id_seq TO authenticated;
 
 -- Grant execute on functions
 GRANT EXECUTE ON FUNCTION get_user_followers TO authenticated;
