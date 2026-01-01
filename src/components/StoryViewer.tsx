@@ -360,29 +360,31 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
         </div>
       </div>
 
-      {/* Story Content */}
+      {/* Story Content - Fixed Uniform Container */}
       <div
         onClick={handleClick}
-        className="w-full h-full flex items-center justify-center"
+        className="w-full h-full flex items-center justify-center p-4"
       >
-        {currentStory.media_type === 'image' ? (
-          <img
-            src={currentStory.media_url}
-            alt="Story"
-            className="max-w-full max-h-full object-contain select-none"
-            draggable={false}
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            src={currentStory.media_url}
-            className="max-w-full max-h-full object-contain"
-            onTimeUpdate={handleVideoProgress}
-            onEnded={handleVideoEnded}
-            playsInline
-            loop={false}
-          />
-        )}
+        <div className="relative w-full max-w-md h-[85vh] bg-black/20 rounded-lg overflow-hidden flex items-center justify-center">
+          {currentStory.media_type === 'image' ? (
+            <img
+              src={currentStory.media_url}
+              alt="Story"
+              className="w-full h-full object-contain select-none"
+              draggable={false}
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              src={currentStory.media_url}
+              className="w-full h-full object-contain"
+              onTimeUpdate={handleVideoProgress}
+              onEnded={handleVideoEnded}
+              playsInline
+              loop={false}
+            />
+          )}
+        </div>
       </div>
 
       {/* Pause Indicator */}
