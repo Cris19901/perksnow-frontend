@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, Upload, Image as ImageIcon, Video } from 'lucide-react';
+import { X, Upload, Image as ImageIcon, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/image-upload';
@@ -14,99 +14,130 @@ interface StoryUploadProps {
   onSuccess?: () => void;
 }
 
+interface MediaFile {
+  file: File;
+  preview: string;
+  type: 'image' | 'video';
+}
+
 export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps) {
   const { user } = useAuth();
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentUploadIndex, setCurrentUploadIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    // Validate file type
-    const isImage = selectedFile.type.startsWith('image/');
-    const isVideo = selectedFile.type.startsWith('video/');
+    const validFiles: MediaFile[] = [];
 
-    if (!isImage && !isVideo) {
-      toast.error('Please select an image or video file');
-      return;
-    }
+    for (const selectedFile of selectedFiles) {
+      // Validate file type
+      const isImage = selectedFile.type.startsWith('image/');
+      const isVideo = selectedFile.type.startsWith('video/');
 
-    // Validate file size
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024; // 50MB for videos, 10MB for images
-    if (selectedFile.size > maxSize) {
-      toast.error(`File too large. Maximum size is ${isVideo ? '50MB' : '10MB'}`);
-      return;
-    }
-
-    // Validate video duration (max 60 seconds)
-    if (isVideo) {
-      try {
-        const duration = await getVideoDuration(selectedFile);
-        if (duration > 60) {
-          toast.error('Video must be 60 seconds or less');
-          return;
-        }
-      } catch (err) {
-        console.error('Error validating video:', err);
-        toast.error('Failed to validate video. Please try another file.');
-        return;
+      if (!isImage && !isVideo) {
+        toast.error(`${selectedFile.name}: Invalid file type`);
+        continue;
       }
+
+      // Validate file size
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        toast.error(`${selectedFile.name}: File too large. Max ${isVideo ? '50MB' : '10MB'}`);
+        continue;
+      }
+
+      // Validate video duration (max 60 seconds)
+      if (isVideo) {
+        try {
+          const duration = await getVideoDuration(selectedFile);
+          if (duration > 60) {
+            toast.error(`${selectedFile.name}: Video must be 60 seconds or less`);
+            continue;
+          }
+        } catch (err) {
+          console.error('Error validating video:', err);
+          toast.error(`${selectedFile.name}: Failed to validate video`);
+          continue;
+        }
+      }
+
+      validFiles.push({
+        file: selectedFile,
+        preview: URL.createObjectURL(selectedFile),
+        type: isImage ? 'image' : 'video'
+      });
     }
 
-    setFile(selectedFile);
-    setMediaType(isImage ? 'image' : 'video');
-    setPreview(URL.createObjectURL(selectedFile));
+    if (validFiles.length > 0) {
+      setMediaFiles(prev => [...prev, ...validFiles]);
+      toast.success(`${validFiles.length} file(s) added`);
+    }
   };
 
   const handleUpload = async () => {
-    if (!file || !user || !mediaType) return;
+    if (mediaFiles.length === 0 || !user) return;
 
     try {
       setUploading(true);
-      setUploadProgress(10);
+      setCurrentUploadIndex(0);
 
-      // Upload media to R2
-      const bucket = mediaType === 'video' ? 'videos' : 'posts';
-      const mediaUrl = await uploadImage(file, bucket, user.id);
-      setUploadProgress(60);
+      // Upload each file sequentially
+      for (let i = 0; i < mediaFiles.length; i++) {
+        setCurrentUploadIndex(i);
+        const media = mediaFiles[i];
 
-      // Get video duration if it's a video
-      let duration = 5; // Default 5 seconds for images
-      if (mediaType === 'video' && file) {
-        duration = await getVideoDuration(file);
+        // Calculate progress per file
+        const baseProgress = (i / mediaFiles.length) * 100;
+        const progressIncrement = 100 / mediaFiles.length;
+
+        setUploadProgress(baseProgress + progressIncrement * 0.2);
+
+        // Upload media to R2
+        const bucket = media.type === 'video' ? 'videos' : 'posts';
+        const mediaUrl = await uploadImage(media.file, bucket, user.id);
+
+        setUploadProgress(baseProgress + progressIncrement * 0.6);
+
+        // Get duration
+        let duration = 5;
+        if (media.type === 'video') {
+          duration = await getVideoDuration(media.file);
+        }
+
+        setUploadProgress(baseProgress + progressIncrement * 0.8);
+
+        // Insert story into database
+        const { error } = await supabase.from('stories').insert({
+          user_id: user.id,
+          media_url: mediaUrl,
+          media_type: media.type,
+          thumbnail_url: media.type === 'video' ? mediaUrl : null,
+          duration: duration
+        });
+
+        if (error) throw error;
+
+        setUploadProgress(baseProgress + progressIncrement);
       }
 
-      setUploadProgress(80);
-
-      // Insert story into database
-      const { error } = await supabase.from('stories').insert({
-        user_id: user.id,
-        media_url: mediaUrl,
-        media_type: mediaType,
-        thumbnail_url: mediaType === 'video' ? mediaUrl : null,
-        duration: duration
-      });
-
-      if (error) throw error;
-
-      setUploadProgress(100);
-
-      toast.success('Story uploaded successfully!');
+      toast.success(`${mediaFiles.length} ${mediaFiles.length === 1 ? 'story' : 'stories'} uploaded successfully!`);
       onOpenChange(false);
       resetForm();
       onSuccess?.();
 
     } catch (err: any) {
       console.error('Error uploading story:', err);
-      toast.error(err.message || 'Failed to upload story');
+      toast.error(err.message || 'Failed to upload stories');
     } finally {
       setUploading(false);
       setUploadProgress(0);
+      setCurrentUploadIndex(0);
     }
   };
 
@@ -119,16 +150,28 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
         resolve(Math.floor(video.duration));
       };
       video.onerror = () => {
-        resolve(10); // Default to 10 seconds if we can't get duration
+        resolve(10);
       };
       video.src = URL.createObjectURL(file);
     });
   };
 
+  const removeFile = (index: number) => {
+    setMediaFiles(prev => {
+      const newFiles = [...prev];
+      URL.revokeObjectURL(newFiles[index].preview);
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
+    if (currentIndex >= mediaFiles.length - 1) {
+      setCurrentIndex(Math.max(0, mediaFiles.length - 2));
+    }
+  };
+
   const resetForm = () => {
-    setFile(null);
-    setPreview(null);
-    setMediaType(null);
+    mediaFiles.forEach(media => URL.revokeObjectURL(media.preview));
+    setMediaFiles([]);
+    setCurrentIndex(0);
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -142,45 +185,127 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
     }
   };
 
+  const currentMedia = mediaFiles[currentIndex];
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Story</DialogTitle>
+          <DialogTitle>
+            Create Story {mediaFiles.length > 0 && `(${mediaFiles.length})`}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* File Preview */}
-          {preview ? (
-            <div className="relative max-h-96 bg-black rounded-lg overflow-hidden flex items-center justify-center">
-              {mediaType === 'image' ? (
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="max-h-96 w-full object-contain"
-                />
-              ) : (
-                <video
-                  src={preview}
-                  controls
-                  className="max-h-96 w-full object-contain"
-                />
+          {mediaFiles.length > 0 ? (
+            <div className="space-y-3">
+              {/* Main Preview - Fixed Size */}
+              <div className="relative w-full h-[400px] bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                {currentMedia.type === 'image' ? (
+                  <img
+                    src={currentMedia.preview}
+                    alt="Preview"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <video
+                    src={currentMedia.preview}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                )}
+
+                {!uploading && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-2 right-2 bg-black/50 text-white hover:bg-black/70"
+                    onClick={() => removeFile(currentIndex)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+
+                {/* Navigation Arrows */}
+                {mediaFiles.length > 1 && (
+                  <>
+                    {currentIndex > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white hover:bg-black/70 rounded-full p-2"
+                        onClick={() => setCurrentIndex(prev => prev - 1)}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </Button>
+                    )}
+                    {currentIndex < mediaFiles.length - 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white hover:bg-black/70 rounded-full p-2"
+                        onClick={() => setCurrentIndex(prev => prev + 1)}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {/* Counter */}
+                {mediaFiles.length > 1 && (
+                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
+                    {currentIndex + 1} / {mediaFiles.length}
+                  </div>
+                )}
+              </div>
+
+              {/* Thumbnail Strip */}
+              {mediaFiles.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {mediaFiles.map((media, index) => (
+                    <div
+                      key={index}
+                      onClick={() => setCurrentIndex(index)}
+                      className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+                        index === currentIndex
+                          ? 'border-purple-500 scale-105'
+                          : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      {media.type === 'image' ? (
+                        <img
+                          src={media.preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-black flex items-center justify-center">
+                          <Video className="w-6 h-6 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
-              {!uploading && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute top-2 right-2 bg-black/50 text-white hover:bg-black/70"
-                  onClick={resetForm}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
+
+              {/* Add More Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full"
+              >
+                <ImageIcon className="w-4 h-4 mr-2" />
+                Add More Files
+              </Button>
             </div>
           ) : (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="aspect-[9/16] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-purple-500 transition-colors"
+              className="w-full h-[400px] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-purple-500 transition-colors"
             >
               <div className="flex gap-4">
                 <div className="p-4 bg-purple-100 rounded-full">
@@ -195,7 +320,10 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
                   Click to upload
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Image (up to 10MB) or Video (up to 50MB, max 60s)
+                  Select multiple images or videos
+                </p>
+                <p className="text-xs text-gray-500">
+                  Images: up to 10MB • Videos: up to 50MB, max 60s
                 </p>
               </div>
             </div>
@@ -205,6 +333,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
             ref={fileInputRef}
             type="file"
             accept="image/*,video/*"
+            multiple
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -214,7 +343,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
             <div className="space-y-2">
               <Progress value={uploadProgress} className="h-2" />
               <p className="text-sm text-center text-gray-500">
-                Uploading... {uploadProgress}%
+                Uploading {currentUploadIndex + 1} of {mediaFiles.length}... {Math.round(uploadProgress)}%
               </p>
             </div>
           )}
@@ -231,7 +360,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={!file || uploading}
+              disabled={mediaFiles.length === 0 || uploading}
               className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600"
             >
               {uploading ? (
@@ -242,7 +371,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Story
+                  Upload {mediaFiles.length > 0 ? `(${mediaFiles.length})` : 'Story'}
                 </>
               )}
             </Button>
@@ -251,8 +380,8 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
           {/* Info */}
           <div className="text-xs text-gray-500 space-y-1">
             <p>• Stories disappear after 24 hours</p>
-            <p>• Images display for 5 seconds by default</p>
-            <p>• Videos play for their full duration (max 60 seconds)</p>
+            <p>• Select multiple files to upload as separate stories</p>
+            <p>• Images display for 5 seconds, videos play for their duration</p>
           </div>
         </div>
       </DialogContent>
