@@ -1,10 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
-import { TrendingUp, UserPlus, Loader2 } from 'lucide-react';
+import { TrendingUp, UserPlus, Loader2, UserCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface SuggestedUser {
   id: string;
@@ -27,11 +28,34 @@ export function Sidebar() {
   const [trending, setTrending] = useState<TrendingTag[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingTrending, setLoadingTrending] = useState(true);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followingInProgress, setFollowingInProgress] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSuggestedUsers();
     fetchTrending();
+    if (user) {
+      fetchFollowing();
+    }
   }, [user]);
+
+  const fetchFollowing = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      if (error) throw error;
+
+      const followingSet = new Set(data?.map(f => f.following_id) || []);
+      setFollowingIds(followingSet);
+    } catch (err) {
+      console.error('Error fetching following:', err);
+    }
+  };
 
   const fetchSuggestedUsers = async () => {
     try {
@@ -117,6 +141,64 @@ export function Sidebar() {
     return count.toString();
   };
 
+  const handleFollow = async (targetUserId: string) => {
+    if (!user) {
+      toast.error('Please log in to follow users');
+      return;
+    }
+
+    if (followingInProgress.has(targetUserId)) {
+      return; // Prevent double-clicking
+    }
+
+    try {
+      setFollowingInProgress(prev => new Set(prev).add(targetUserId));
+
+      const isFollowing = followingIds.has(targetUserId);
+
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', targetUserId);
+
+        if (error) throw error;
+
+        setFollowingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(targetUserId);
+          return newSet;
+        });
+
+        toast.success('Unfollowed successfully');
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from('follows')
+          .insert({
+            follower_id: user.id,
+            following_id: targetUserId
+          });
+
+        if (error) throw error;
+
+        setFollowingIds(prev => new Set(prev).add(targetUserId));
+        toast.success('Following successfully');
+      }
+    } catch (err: any) {
+      console.error('Error toggling follow:', err);
+      toast.error('Failed to update follow status');
+    } finally {
+      setFollowingInProgress(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(targetUserId);
+        return newSet;
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Suggested for you */}
@@ -135,27 +217,44 @@ export function Sidebar() {
           ) : suggestedUsers.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-2">No suggestions yet</p>
           ) : (
-            suggestedUsers.map((userItem) => (
-              <div key={userItem.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={getAvatarUrl(userItem)} />
-                    <AvatarFallback>
-                      {(userItem.full_name || userItem.username || 'U')[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm">{userItem.full_name || userItem.username}</p>
-                    <p className="text-xs text-gray-500">
-                      {formatCount(userItem.followers_count || 0)} followers
-                    </p>
+            suggestedUsers.map((userItem) => {
+              const isFollowing = followingIds.has(userItem.id);
+              const isLoading = followingInProgress.has(userItem.id);
+
+              return (
+                <div key={userItem.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={getAvatarUrl(userItem)} />
+                      <AvatarFallback>
+                        {(userItem.full_name || userItem.username || 'U')[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm">{userItem.full_name || userItem.username}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatCount(userItem.followers_count || 0)} followers
+                      </p>
+                    </div>
                   </div>
+                  <Button
+                    size="sm"
+                    variant={isFollowing ? "default" : "outline"}
+                    className="gap-1"
+                    onClick={() => handleFollow(userItem.id)}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : isFollowing ? (
+                      <UserCheck className="w-4 h-4" />
+                    ) : (
+                      <UserPlus className="w-4 h-4" />
+                    )}
+                  </Button>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1">
-                  <UserPlus className="w-4 h-4" />
-                </Button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
