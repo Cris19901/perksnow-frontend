@@ -152,7 +152,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
         <div className="space-y-4">
           {/* File Preview */}
           {preview ? (
-            <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden">
+            <div className="relative max-h-[60vh] aspect-[9/16] bg-black rounded-lg overflow-hidden">
               {mediaType === 'image' ? (
                 <img
                   src={preview}
