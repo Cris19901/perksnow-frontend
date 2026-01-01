@@ -144,7 +144,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Story</DialogTitle>
         </DialogHeader>
@@ -152,18 +152,18 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
         <div className="space-y-4">
           {/* File Preview */}
           {preview ? (
-            <div className="relative max-h-[60vh] aspect-[9/16] bg-black rounded-lg overflow-hidden">
+            <div className="relative max-h-96 bg-black rounded-lg overflow-hidden flex items-center justify-center">
               {mediaType === 'image' ? (
                 <img
                   src={preview}
                   alt="Preview"
-                  className="w-full h-full object-contain"
+                  className="max-h-96 w-full object-contain"
                 />
               ) : (
                 <video
                   src={preview}
                   controls
-                  className="w-full h-full object-contain"
+                  className="max-h-96 w-full object-contain"
                 />
               )}
               {!uploading && (
