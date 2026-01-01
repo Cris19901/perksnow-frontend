@@ -17,6 +17,7 @@ import { SettingsPage } from './components/pages/SettingsPage';
 import { ReelsPage } from './components/pages/ReelsPage';
 import { PointsPage } from './components/pages/PointsPage';
 import { AdminWithdrawalsPage } from './components/pages/AdminWithdrawalsPage';
+import { HashtagPage } from './components/pages/HashtagPage';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { toast, Toaster } from 'sonner@2.0.3';
@@ -215,6 +216,17 @@ function AppContent() {
               <FeedPage
                 onCartClick={handleCartClick}
                 onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hashtag/:hashtag"
+          element={
+            <ProtectedRoute>
+              <HashtagPage
+                onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />
             </ProtectedRoute>

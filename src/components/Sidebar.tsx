@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { TrendingUp, UserPlus, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -21,6 +22,7 @@ interface TrendingTag {
 
 export function Sidebar() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [trending, setTrending] = useState<TrendingTag[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -173,8 +175,15 @@ export function Sidebar() {
             <p className="text-sm text-gray-500 text-center py-2">No trending topics yet</p>
           ) : (
             trending.map((item) => (
-              <div key={item.id} className="cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors">
-                <p className="text-blue-600">{item.tag}</p>
+              <div
+                key={item.id}
+                onClick={() => {
+                  const hashtagText = item.tag.replace('#', '');
+                  navigate(`/hashtag/${hashtagText}`);
+                }}
+                className="cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+              >
+                <p className="text-blue-600 font-medium">{item.tag}</p>
                 <p className="text-xs text-gray-500">{formatCount(item.posts_count)} posts</p>
               </div>
             ))

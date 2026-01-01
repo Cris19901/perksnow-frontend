@@ -27,7 +27,7 @@ function formatTimestamp(dateString: string) {
 }
 
 interface FeedPageProps {
-  onNavigate?: (page: string) => void;
+  onNavigate?: (page: string, data?: any) => void;
   onCartClick?: () => void;
   onAddToCart?: (id: number) => void;
   cartItemsCount?: number;
