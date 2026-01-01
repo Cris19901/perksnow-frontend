@@ -1,6 +1,6 @@
-# SocialHub Frontend
+# LavLay
 
-React-based frontend application for the SocialHub social commerce platform with TypeScript, Vite, and Supabase authentication.
+React-based frontend application for the LavLay social commerce platform with TypeScript, Vite, and Supabase authentication.
 
 ## Features
 
@@ -28,14 +28,14 @@ React-based frontend application for the SocialHub social commerce platform with
 
 - Node.js 18+ and npm
 - Supabase account
-- Backend API running (see [backend repository](https://github.com/yourusername/socialhub-backend))
+- Backend API running (hosted on Railway)
 
 ## Installation
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/socialhub-frontend.git
-cd socialhub-frontend
+git clone https://github.com/Cris19901/perksnow-frontend.git
+cd perksnow-frontend
 ```
 
 2. **Install dependencies:**
@@ -263,13 +263,9 @@ https://www.figma.com/design/TXWRLvxiyi4J9zvwDWoIrC/Social-Media-Platform
 
 For issues and questions:
 - Open an issue on GitHub
-- Check the [backend repository](https://github.com/yourusername/socialhub-backend)
 
 ## License
 
 MIT
-
-## Related Repositories
-
-- Backend API: https://github.com/yourusername/socialhub-backend
 // Force Vercel redeploy after RLS fix - Fri, Nov 21, 2025  4:27:18 PM
+# Last updated: Thu, Jan  1, 2026  5:35:22 AM
