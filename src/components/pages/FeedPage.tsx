@@ -4,9 +4,12 @@ import { Stories } from '../Stories';
 import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
 import { ProductPost } from '../ProductPost';
+import { ReelPost } from '../ReelPost';
+import { ReelsViewer } from '../ReelsViewer';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Helper function to format timestamps
 function formatTimestamp(dateString: string) {
@@ -34,10 +37,14 @@ interface FeedPageProps {
 }
 
 export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount }: FeedPageProps) {
+  const { user } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [reels, setReels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showReelsViewer, setShowReelsViewer] = useState(false);
+  const [selectedReelId, setSelectedReelId] = useState<string | undefined>();
 
   const fetchFeedData = async () => {
     try {
@@ -80,6 +87,16 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
       if (productsError) throw productsError;
 
+      // Fetch reels
+      const { data: reelsData, error: reelsError } = await supabase.rpc('get_reels_feed', {
+        p_user_id: user?.id || null,
+        p_limit: 10,
+        p_offset: 0
+      });
+
+      // Don't throw error if RPC doesn't exist, just continue without reels
+      const reels = reelsError ? [] : (reelsData || []);
+
       // Transform posts data to match the Post component format
       const transformedPosts = postsData?.map((post: any) => ({
         id: post.id,
@@ -117,9 +134,10 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
         timestamp: formatTimestamp(product.created_at),
       })) || [];
 
-      console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts and', transformedProducts.length, 'products');
+      console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts,', transformedProducts.length, 'products, and', reels.length, 'reels');
       setPosts(transformedPosts);
       setProducts(transformedProducts);
+      setReels(reels);
     } catch (err: any) {
       console.error('❌ FeedPage: Error fetching feed data:', err);
       setError(err.message || 'Failed to load feed');
@@ -131,6 +149,34 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   useEffect(() => {
     fetchFeedData();
   }, []);
+
+  const handleReelClick = (reelId: string) => {
+    setSelectedReelId(reelId);
+    setShowReelsViewer(true);
+  };
+
+  // Mix posts, products, and reels for a varied feed
+  const createMixedFeed = () => {
+    const feed: Array<{ type: 'post' | 'product' | 'reel'; data: any }> = [];
+
+    // Add all posts
+    posts.forEach(post => feed.push({ type: 'post', data: post }));
+
+    // Add all products
+    products.forEach(product => feed.push({ type: 'product', data: product }));
+
+    // Add all reels
+    reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
+
+    // Sort by created_at if available, otherwise maintain order
+    return feed.sort((a, b) => {
+      const dateA = a.data.created_at ? new Date(a.data.created_at).getTime() : 0;
+      const dateB = b.data.created_at ? new Date(b.data.created_at).getTime() : 0;
+      return dateB - dateA; // Most recent first
+    });
+  };
+
+  const mixedFeed = createMixedFeed();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -172,17 +218,21 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             {/* Feed */}
             {!loading && !error && (
               <div className="space-y-4 sm:space-y-6">
-                {posts.length === 0 && products.length === 0 && (
+                {mixedFeed.length === 0 && (
                   <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
                     <p className="text-gray-600">No posts yet. Be the first to share something!</p>
                   </div>
                 )}
-                {posts.map((post) => (
-                  <Post key={post.id} {...post} />
-                ))}
-                {products.map((post) => (
-                  <ProductPost key={post.id} {...post} onAddToCart={onAddToCart} />
-                ))}
+                {mixedFeed.map((item, index) => {
+                  if (item.type === 'post') {
+                    return <Post key={`post-${item.data.id}`} {...item.data} />;
+                  } else if (item.type === 'product') {
+                    return <ProductPost key={`product-${item.data.id}`} {...item.data} onAddToCart={onAddToCart} />;
+                  } else if (item.type === 'reel') {
+                    return <ReelPost key={`reel-${item.data.reel_id}`} {...item.data} onReelClick={handleReelClick} />;
+                  }
+                  return null;
+                })}
               </div>
             )}
           </div>
@@ -198,6 +248,18 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav currentPage="feed" onNavigate={onNavigate} />
+
+      {/* Reels Viewer */}
+      {showReelsViewer && (
+        <ReelsViewer
+          initialReelId={selectedReelId}
+          onClose={() => {
+            setShowReelsViewer(false);
+            setSelectedReelId(undefined);
+            fetchFeedData(); // Refresh feed to get updated counts
+          }}
+        />
+      )}
     </div>
   );
 }
