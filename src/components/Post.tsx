@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { PostComments } from './PostComments';
 import { Sheet, SheetContent } from './ui/sheet';
-import { ImageCarousel } from './ImageCarousel';
 import { ImageGrid } from './ImageGrid';
 import { ImageLightbox } from './ImageLightbox';
 
@@ -202,17 +201,10 @@ export function Post({ id, author, content, image, images, images_count, likes, 
                 className="w-full object-cover max-h-[600px]"
               />
             </div>
-          ) : displayImages.length <= 4 ? (
-            // 2-4 images - use grid layout
+          ) : (
+            // 2+ images - use Instagram-style grid layout
             <ImageGrid
               images={displayImages}
-              onImageClick={handleImageClick}
-            />
-          ) : (
-            // 5+ images - use carousel
-            <ImageCarousel
-              images={displayImages}
-              postId={id}
               onImageClick={handleImageClick}
             />
           )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../Header';
 import { Stories } from '../Stories';
@@ -10,7 +10,7 @@ import { ReelsViewer } from '../ReelsViewer';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Button } from '../ui/button';
-import { Crown, Sparkles, Gift, Users2 } from 'lucide-react';
+import { Crown, Sparkles, Gift, Users2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -52,12 +52,27 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [openReelComments, setOpenReelComments] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState<string>('free');
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const fetchFeedData = async () => {
+  const POSTS_PER_PAGE = 10;
+
+  const fetchFeedData = async (isLoadMore = false) => {
     try {
-      setLoading(true);
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setPage(0);
+      }
       setError(null);
-      console.log('🔍 FeedPage: Fetching feed data from Supabase...');
+
+      const currentPage = isLoadMore ? page : 0;
+      const offset = currentPage * POSTS_PER_PAGE;
+      console.log(`🔍 FeedPage: Fetching feed data (page ${currentPage}, offset ${offset})...`);
 
       // Fetch regular posts with user information
       const { data: postsData, error: postsError } = await supabase
@@ -83,42 +98,52 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .range(offset, offset + POSTS_PER_PAGE - 1);
 
       if (postsError) throw postsError;
 
+      // Check if there are more posts to load
+      const hasMorePosts = postsData && postsData.length === POSTS_PER_PAGE;
+
       console.log('🔍 FeedPage: Fetched posts with images:', postsData);
 
-      // Fetch products with seller information
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select(`
-          *,
-          users:seller_id (
-            id,
-            username,
-            full_name,
-            avatar_url,
-            subscription_tier,
-            subscription_status,
-            subscription_expires_at
-          )
-        `)
-        .eq('is_available', true)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Only fetch products and reels on initial load (not on load more)
+      let productsData: any[] = [];
+      let reels: any[] = [];
 
-      if (productsError) throw productsError;
+      if (!isLoadMore) {
+        // Fetch products with seller information
+        const { data: fetchedProducts, error: productsError } = await supabase
+          .from('products')
+          .select(`
+            *,
+            users:seller_id (
+              id,
+              username,
+              full_name,
+              avatar_url,
+              subscription_tier,
+              subscription_status,
+              subscription_expires_at
+            )
+          `)
+          .eq('is_available', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      // Fetch reels
-      const { data: reelsData, error: reelsError } = await supabase.rpc('get_reels_feed', {
-        p_user_id: user?.id || null,
-        p_limit: 10,
-        p_offset: 0
-      });
+        if (productsError) throw productsError;
+        productsData = fetchedProducts || [];
 
-      // Don't throw error if RPC doesn't exist, just continue without reels
-      const reels = reelsError ? [] : (reelsData || []);
+        // Fetch reels
+        const { data: reelsData, error: reelsError } = await supabase.rpc('get_reels_feed', {
+          p_user_id: user?.id || null,
+          p_limit: 10,
+          p_offset: 0
+        });
+
+        // Don't throw error if RPC doesn't exist, just continue without reels
+        reels = reelsError ? [] : (reelsData || []);
+      }
 
       // Transform posts data to match the Post component format
       const transformedPosts = postsData?.map((post: any) => {
@@ -184,16 +209,34 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       }) || [];
 
       console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts,', transformedProducts.length, 'products, and', reels.length, 'reels');
-      setPosts(transformedPosts);
-      setProducts(transformedProducts);
-      setReels(reels);
+
+      if (isLoadMore) {
+        // Append new posts to existing posts
+        setPosts(prev => [...prev, ...transformedPosts]);
+        setPage(prev => prev + 1);
+      } else {
+        // Replace all data on initial load
+        setPosts(transformedPosts);
+        setProducts(transformedProducts);
+        setReels(reels);
+      }
+
+      setHasMore(hasMorePosts);
     } catch (err: any) {
       console.error('❌ FeedPage: Error fetching feed data:', err);
       setError(err.message || 'Failed to load feed');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
+
+  // Load more callback for infinite scroll
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore && !loading) {
+      fetchFeedData(true);
+    }
+  }, [loadingMore, hasMore, loading, page]);
 
   const fetchSubscriptionTier = async () => {
     if (!user) return;
@@ -228,6 +271,33 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       fetchSubscriptionTier();
     }
   }, [user]);
+
+  // Set up Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting && hasMore && !loading && !loadingMore) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, loading, loadingMore, loadMore]);
 
   const handleReelClick = (reelId: string, showComments = false) => {
     setSelectedReelId(reelId);
@@ -278,9 +348,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             <div className="lg:hidden space-y-4">
               {/* Referral Program Card */}
               {user && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200 p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 bg-green-600 rounded-lg">
+                    <div className="p-2 bg-amber-500 rounded-lg">
                       <Gift className="w-5 h-5 text-white" />
                     </div>
                     <div className="flex-1">
@@ -290,7 +360,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                       </p>
                       <Button
                         size="sm"
-                        className="w-full bg-green-600 hover:bg-green-700"
+                        className="w-full bg-amber-600 hover:bg-amber-700 text-white"
                         onClick={() => navigate('/referrals')}
                       >
                         <Users2 className="w-4 h-4 mr-2" />
@@ -368,6 +438,21 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                   }
                   return null;
                 })}
+
+                {/* Infinite Scroll Trigger / Load More */}
+                <div ref={loadMoreRef} className="py-4">
+                  {loadingMore && (
+                    <div className="flex items-center justify-center gap-2 text-gray-500">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Loading more posts...</span>
+                    </div>
+                  )}
+                  {!hasMore && mixedFeed.length > 0 && (
+                    <div className="text-center text-gray-400 text-sm">
+                      You've reached the end of your feed
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
