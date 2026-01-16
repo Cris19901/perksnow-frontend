@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '../Header';
 import { Stories } from '../Stories';
 import { CreatePost } from '../CreatePost';
@@ -8,6 +9,8 @@ import { ReelPost } from '../ReelPost';
 import { ReelsViewer } from '../ReelsViewer';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
+import { Button } from '../ui/button';
+import { Crown, Sparkles, Gift, Users2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -38,6 +41,7 @@ interface FeedPageProps {
 
 export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount }: FeedPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [reels, setReels] = useState<any[]>([]);
@@ -45,6 +49,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [error, setError] = useState<string | null>(null);
   const [showReelsViewer, setShowReelsViewer] = useState(false);
   const [selectedReelId, setSelectedReelId] = useState<string | undefined>();
+  const [openReelComments, setOpenReelComments] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState<string>('free');
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   const fetchFeedData = async () => {
     try {
@@ -61,13 +68,26 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             id,
             username,
             full_name,
-            avatar_url
+            avatar_url,
+            subscription_tier,
+            subscription_status,
+            subscription_expires_at
+          ),
+          post_images (
+            id,
+            image_url,
+            image_order,
+            width,
+            height,
+            alt_text
           )
         `)
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (postsError) throw postsError;
+
+      console.log('🔍 FeedPage: Fetched posts with images:', postsData);
 
       // Fetch products with seller information
       const { data: productsData, error: productsError } = await supabase
@@ -78,7 +98,10 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             id,
             username,
             full_name,
-            avatar_url
+            avatar_url,
+            subscription_tier,
+            subscription_status,
+            subscription_expires_at
           )
         `)
         .eq('is_available', true)
@@ -98,41 +121,67 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       const reels = reelsError ? [] : (reelsData || []);
 
       // Transform posts data to match the Post component format
-      const transformedPosts = postsData?.map((post: any) => ({
-        id: post.id,
-        author: {
-          name: post.users?.full_name || post.users?.username || 'Unknown User',
-          username: `@${post.users?.username || 'unknown'}`,
-          avatar: post.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-        },
-        content: post.content,
-        image: post.image_url,
-        likes: post.likes_count || 0,
-        comments: post.comments_count || 0,
-        shares: post.shares_count || 0,
-        timestamp: formatTimestamp(post.created_at),
-      })) || [];
+      const transformedPosts = postsData?.map((post: any) => {
+        const isVerified = post.users?.subscription_tier === 'pro' &&
+                          post.users?.subscription_status === 'active' &&
+                          (!post.users?.subscription_expires_at || new Date(post.users.subscription_expires_at) > new Date());
+
+        // Transform post_images array to match the expected format
+        const images = post.post_images
+          ?.sort((a: any, b: any) => a.image_order - b.image_order)
+          .map((img: any) => ({
+            url: img.image_url,
+            width: img.width,
+            height: img.height,
+            alt: img.alt_text,
+          })) || [];
+
+        return {
+          id: post.id,
+          author: {
+            name: post.users?.full_name || post.users?.username || 'Unknown User',
+            username: `@${post.users?.username || 'unknown'}`,
+            avatar: post.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+            isVerified,
+          },
+          content: post.content,
+          image: post.image_url, // Keep for backwards compatibility
+          images: images.length > 0 ? images : undefined,
+          images_count: post.images_count || 0,
+          likes: post.likes_count || 0,
+          comments: post.comments_count || 0,
+          shares: post.shares_count || 0,
+          timestamp: formatTimestamp(post.created_at),
+        };
+      }) || [];
 
       // Transform products data to match the ProductPost component format
-      const transformedProducts = productsData?.map((product: any) => ({
-        id: product.id,
-        author: {
-          name: product.users?.full_name || product.users?.username || 'Unknown Seller',
-          username: `@${product.users?.username || 'unknown'}`,
-          avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-        },
-        content: product.description,
-        product: {
-          name: product.title,
-          price: product.price,
-          image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
-          category: product.category || 'General',
-        },
-        likes: product.likes_count || 0,
-        comments: 0,
-        shares: 0,
-        timestamp: formatTimestamp(product.created_at),
-      })) || [];
+      const transformedProducts = productsData?.map((product: any) => {
+        const isVerified = product.users?.subscription_tier === 'pro' &&
+                          product.users?.subscription_status === 'active' &&
+                          (!product.users?.subscription_expires_at || new Date(product.users.subscription_expires_at) > new Date());
+
+        return {
+          id: product.id,
+          author: {
+            name: product.users?.full_name || product.users?.username || 'Unknown Seller',
+            username: `@${product.users?.username || 'unknown'}`,
+            avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+            isVerified,
+          },
+          content: product.description,
+          product: {
+            name: product.title,
+            price: product.price,
+            image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
+            category: product.category || 'General',
+          },
+          likes: product.likes_count || 0,
+          comments: 0,
+          shares: 0,
+          timestamp: formatTimestamp(product.created_at),
+        };
+      }) || [];
 
       console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts,', transformedProducts.length, 'products, and', reels.length, 'reels');
       setPosts(transformedPosts);
@@ -146,12 +195,43 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     }
   };
 
+  const fetchSubscriptionTier = async () => {
+    if (!user) return;
+
+    try {
+      setLoadingSubscription(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('subscription_tier, subscription_status, subscription_expires_at')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      // Check if user has active Pro subscription
+      const isPro = data?.subscription_tier === 'pro'
+        && data?.subscription_status === 'active'
+        && (!data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date());
+
+      setSubscriptionTier(isPro ? 'pro' : 'free');
+    } catch (err) {
+      console.error('Error fetching subscription tier:', err);
+      setSubscriptionTier('free');
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
+
   useEffect(() => {
     fetchFeedData();
-  }, []);
+    if (user) {
+      fetchSubscriptionTier();
+    }
+  }, [user]);
 
-  const handleReelClick = (reelId: string) => {
+  const handleReelClick = (reelId: string, showComments = false) => {
     setSelectedReelId(reelId);
+    setOpenReelComments(showComments);
     setShowReelsViewer(true);
   };
 
@@ -193,6 +273,61 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           <div className="space-y-4 sm:space-y-6">
             <Stories />
             <CreatePost onPostCreated={fetchFeedData} />
+
+            {/* Mobile Referral & Upgrade Cards (hidden on desktop) */}
+            <div className="lg:hidden space-y-4">
+              {/* Referral Program Card */}
+              {user && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 bg-green-600 rounded-lg">
+                      <Gift className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Earn with Referrals</h3>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Invite friends and earn 20 points + 5% of their deposits
+                      </p>
+                      <Button
+                        size="sm"
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={() => navigate('/referrals')}
+                      >
+                        <Users2 className="w-4 h-4 mr-2" />
+                        View Referral Dashboard
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Upgrade to Pro Banner (Only for Free Users) */}
+              {!loadingSubscription && subscriptionTier === 'free' && user && (
+                <div className="bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-lg p-4 text-white shadow-lg">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                      <Crown className="w-5 h-5 text-yellow-300" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-1 flex items-center gap-2">
+                        Upgrade to Pro
+                        <Sparkles className="w-4 h-4 text-yellow-300" />
+                      </h3>
+                      <p className="text-sm text-white/90 leading-relaxed">
+                        Unlock withdrawals, verified badge, unlimited posts & reels, and priority support!
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => navigate('/subscription')}
+                    className="w-full bg-white text-purple-600 hover:bg-gray-100 font-semibold"
+                    size="sm"
+                  >
+                    View Plans
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* Loading State */}
             {loading && (
@@ -253,9 +388,11 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       {showReelsViewer && (
         <ReelsViewer
           initialReelId={selectedReelId}
+          openComments={openReelComments}
           onClose={() => {
             setShowReelsViewer(false);
             setSelectedReelId(undefined);
+            setOpenReelComments(false);
             fetchFeedData(); // Refresh feed to get updated counts
           }}
         />
