@@ -43,9 +43,9 @@ export function LoginPage() {
               className="flex items-center gap-2 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                <span className="text-white">S</span>
+                <span className="text-white font-bold">L</span>
               </div>
-              <span className="text-xl">SocialHub</span>
+              <span className="text-xl font-semibold">LavLay</span>
             </Link>
           </div>
         </div>
@@ -57,7 +57,7 @@ export function LoginPage() {
           {/* Left Side - Branding */}
           <div className="hidden lg:block">
             <div className="space-y-6">
-              <h1 className="text-5xl">Welcome back to SocialHub</h1>
+              <h1 className="text-5xl">Welcome back to LavLay</h1>
               <p className="text-xl text-gray-600">
                 Connect with friends, share your moments, and discover amazing communities.
               </p>

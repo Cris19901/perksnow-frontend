@@ -93,9 +93,9 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
               onClick={() => onNavigate('landing')}
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                <span className="text-white">S</span>
+                <span className="text-white font-bold">L</span>
               </div>
-              <span className="text-xl">SocialHub</span>
+              <span className="text-xl font-semibold">LavLay</span>
             </div>
             <div className="flex items-center gap-4">
               <Button variant="ghost" onClick={() => onNavigate('login')}>
@@ -115,7 +115,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
       {/* Hero */}
       <section className="bg-gradient-to-br from-purple-50 to-pink-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-5xl lg:text-6xl mb-6">About SocialHub</h1>
+          <h1 className="text-5xl lg:text-6xl mb-6">About LavLay</h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             We're on a mission to bring people together and create meaningful connections 
             in an increasingly digital world.
@@ -131,7 +131,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
               <h2 className="text-4xl mb-6">Our Story</h2>
               <div className="space-y-4 text-lg text-gray-600">
                 <p>
-                  Founded in 2023, SocialHub was born from a simple idea: social media should 
+                  Founded in 2023, LavLay was born from a simple idea: social media should 
                   bring people closer together, not drive them apart.
                 </p>
                 <p>
@@ -140,7 +140,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
                   They set out to build something different.
                 </p>
                 <p>
-                  Today, SocialHub serves millions of users worldwide, providing a space where 
+                  Today, LavLay serves millions of users worldwide, providing a space where 
                   authentic relationships flourish and communities thrive. We're proud to be 
                   building a platform that puts people first.
                 </p>
@@ -259,7 +259,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
       <footer className="border-t border-gray-200 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center text-sm text-gray-600">
-            © 2025 SocialHub. All rights reserved.
+            © 2025 LavLay. All rights reserved.
           </div>
         </div>
       </footer>

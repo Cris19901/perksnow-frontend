@@ -120,13 +120,13 @@ export function MobileBottomNav() {
                 </div>
               ) : item.isPoints ? (
                 <div className="flex flex-col items-center">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                    isActive
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                      : 'bg-gradient-to-r from-purple-500 to-pink-500'
-                  }`}>
-                    <Icon className="w-4 h-4 text-white" />
-                  </div>
+                  {isActive ? (
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                  ) : (
+                    <Icon className="w-6 h-6" />
+                  )}
                   <span className={`text-xs font-bold mt-1 ${
                     isActive ? 'text-purple-600' : 'text-gray-700'
                   }`}>

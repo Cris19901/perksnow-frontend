@@ -1,10 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Heart, MessageCircle, Share2, ShoppingCart, MoreHorizontal } from 'lucide-react';
+import { Heart, MessageCircle, Share2, ShoppingCart, MoreHorizontal, Loader2, BadgeCheck } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface ProductPostProps {
   id: number;
@@ -12,6 +16,7 @@ interface ProductPostProps {
     name: string;
     username: string;
     avatar: string;
+    isVerified?: boolean;
   };
   content: string;
   product: {
@@ -38,26 +43,134 @@ export function ProductPost({
   onAddToCart,
   id,
 }: ProductPostProps) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(likes);
+  const [isLiking, setIsLiking] = useState(false);
   const { formatPriceInUSD } = useCurrency();
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikeCount(isLiked ? likeCount - 1 : likeCount + 1);
+  useEffect(() => {
+    if (user) {
+      checkIfLiked();
+    }
+  }, [user, id]);
+
+  const checkIfLiked = async () => {
+    if (!user) {
+      setIsLiked(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('product_likes')
+        .select('id')
+        .eq('product_id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking like status:', error);
+        return;
+      }
+
+      setIsLiked(!!data);
+    } catch (err) {
+      console.error('Error checking if product is liked:', err);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error('Please log in to like products');
+      return;
+    }
+
+    if (isLiking) return;
+
+    try {
+      setIsLiking(true);
+
+      if (isLiked) {
+        // Unlike
+        const { error } = await supabase
+          .from('product_likes')
+          .delete()
+          .eq('product_id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        setIsLiked(false);
+        setLikeCount(prev => Math.max(0, prev - 1));
+        toast.success('Product unliked');
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('product_likes')
+          .insert({
+            product_id: id,
+            user_id: user.id
+          });
+
+        if (error) throw error;
+
+        setIsLiked(true);
+        setLikeCount(prev => prev + 1);
+        toast.success('Product liked');
+      }
+    } catch (err: any) {
+      console.error('Error toggling like:', err);
+      toast.error('Failed to update like');
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `${product.name} - ${author.name}`,
+      text: content,
+      url: `${window.location.origin}/product/${id}`
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toast.success('Shared successfully');
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        toast.success('Link copied to clipboard!');
+      }
+    } catch (err: any) {
+      // User cancelled share or clipboard access denied
+      if (err.name !== 'AbortError') {
+        console.error('Share failed:', err);
+        toast.error('Failed to share');
+      }
+    }
   };
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       {/* Post Header */}
       <div className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-3">
+        <div
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => navigate(`/profile/${author.username.replace('@', '')}`)}
+        >
           <Avatar>
             <AvatarImage src={author.avatar} />
             <AvatarFallback>{author.name[0]}</AvatarFallback>
           </Avatar>
           <div>
-            <p>{author.name}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-semibold">{author.name}</p>
+              {author.isVerified && (
+                <BadgeCheck className="w-4 h-4 text-blue-500 flex-shrink-0" title="Verified Pro User" />
+              )}
+            </div>
             <p className="text-sm text-gray-500">{timestamp}</p>
           </div>
         </div>
@@ -122,15 +235,24 @@ export function ProductPost({
           variant="ghost"
           className={`flex-1 gap-2 ${isLiked ? 'text-pink-600' : ''}`}
           onClick={handleLike}
+          disabled={isLiking}
         >
-          <Heart className={`w-5 h-5 ${isLiked ? 'fill-pink-600' : ''}`} />
+          {isLiking ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Heart className={`w-5 h-5 ${isLiked ? 'fill-pink-600' : ''}`} />
+          )}
           <span className="hidden sm:inline">Like</span>
         </Button>
         <Button variant="ghost" className="flex-1 gap-2">
           <MessageCircle className="w-5 h-5" />
           <span className="hidden sm:inline">Comment</span>
         </Button>
-        <Button variant="ghost" className="flex-1 gap-2">
+        <Button
+          variant="ghost"
+          className="flex-1 gap-2"
+          onClick={handleShare}
+        >
           <Share2 className="w-5 h-5" />
           <span className="hidden sm:inline">Share</span>
         </Button>

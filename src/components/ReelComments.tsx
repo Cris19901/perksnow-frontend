@@ -24,9 +24,10 @@ interface Comment {
 interface ReelCommentsProps {
   reelId: string;
   onClose?: () => void;
+  onCommentAdded?: () => void;
 }
 
-export function ReelComments({ reelId, onClose }: ReelCommentsProps) {
+export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -110,6 +111,7 @@ export function ReelComments({ reelId, onClose }: ReelCommentsProps) {
 
       setComments(prev => [...prev, data]);
       setNewComment('');
+      onCommentAdded?.();
 
       // Scroll to bottom
       setTimeout(() => {

@@ -5,98 +5,85 @@ import { Textarea } from './ui/textarea';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface CreatePostProps {
   onPostCreated?: () => void;
 }
 
+interface UploadedImage {
+  file: File;
+  preview: string;
+  uploading: boolean;
+  url?: string;
+}
+
 export function CreatePost({ onPostCreated }: CreatePostProps) {
   const { user } = useAuth();
   const [postText, setPostText] = useState('');
-  const [uploadedMedia, setUploadedMedia] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     if (!user?.id) {
-      setError('Please log in to upload media');
+      toast.error('Please log in to upload images');
       return;
     }
 
-    setUploading(true);
+    // Limit to 10 images total
+    if (uploadedImages.length + files.length > 10) {
+      toast.error('Maximum 10 images allowed per post');
+      return;
+    }
+
     setError(null);
 
-    try {
+    // Validate and create preview for each file
+    const newImages: UploadedImage[] = [];
+    for (const file of files) {
       // Validate file type
-      const expectedType = type === 'image' ? 'image/' : 'video/';
-      if (!file.type.startsWith(expectedType)) {
-        setError(`Please upload a valid ${type} file`);
-        return;
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} is not an image file`);
+        continue;
       }
 
-      // Validate file size (max 10MB for images, 50MB for videos)
-      const maxSize = type === 'image' ? 10 * 1024 * 1024 : 50 * 1024 * 1024;
-      if (file.size > maxSize) {
-        setError(`${type === 'image' ? 'Image' : 'Video'} size must be less than ${type === 'image' ? '10MB' : '50MB'}`);
-        return;
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name} is too large (max 10MB)`);
+        continue;
       }
 
-      console.log(`🔍 CreatePost: Uploading ${type}:`, file.name);
-
-      // Try Supabase Storage first
-      try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-        const { data, error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(fileName, file);
-
-        if (uploadError) {
-          console.error('❌ Storage upload error:', uploadError);
-          // Fallback: Use data URL
-          const reader = new FileReader();
-          reader.onload = () => {
-            setUploadedMedia(reader.result as string);
-            setMediaType(type);
-          };
-          reader.readAsDataURL(file);
-          return;
-        }
-
-        // Get public URL
-        const { data: publicUrl } = supabase.storage
-          .from('posts')
-          .getPublicUrl(data.path);
-
-        console.log(`✅ CreatePost: ${type} uploaded:`, publicUrl.publicUrl);
-        setUploadedMedia(publicUrl.publicUrl);
-        setMediaType(type);
-      } catch (storageErr) {
-        console.error('❌ Storage exception, using data URL:', storageErr);
-        // Fallback: Use data URL
-        const reader = new FileReader();
-        reader.onload = () => {
-          setUploadedMedia(reader.result as string);
-          setMediaType(type);
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch (err: any) {
-      console.error('❌ File upload failed:', err);
-      setError(err.message || 'Failed to upload file');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      // Create preview
+      const preview = URL.createObjectURL(file);
+      newImages.push({
+        file,
+        preview,
+        uploading: false,
+      });
     }
+
+    setUploadedImages(prev => [...prev, ...newImages]);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => {
+      const newImages = [...prev];
+      // Revoke preview URL to free memory
+      URL.revokeObjectURL(newImages[index].preview);
+      newImages.splice(index, 1);
+      return newImages;
+    });
   };
 
   const handlePost = async () => {
@@ -105,25 +92,61 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       return;
     }
 
-    if (!postText.trim() && !uploadedMedia) {
-      setError('Please enter some text or upload media');
+    if (!postText.trim() && uploadedImages.length === 0) {
+      setError('Please enter some text or upload images');
       return;
     }
 
     setPosting(true);
+    setUploading(true);
     setError(null);
 
     try {
-      console.log('🔍 CreatePost: Creating post...');
+      console.log('🔍 CreatePost: Creating post with', uploadedImages.length, 'images...');
 
-      // Use image_url for both images and videos since database only has image_url column
+      // Upload all images to storage first
+      const imageUrls: string[] = [];
+      for (let i = 0; i < uploadedImages.length; i++) {
+        const image = uploadedImages[i];
+        toast.loading(`Uploading image ${i + 1}/${uploadedImages.length}...`);
+
+        try {
+          const fileExt = image.file.name.split('.').pop();
+          const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+          const { data, error: uploadError } = await supabase.storage
+            .from('posts')
+            .upload(fileName, image.file);
+
+          if (uploadError) {
+            console.error('❌ Storage upload error:', uploadError);
+            throw uploadError;
+          }
+
+          // Get public URL
+          const { data: publicUrl } = supabase.storage
+            .from('posts')
+            .getPublicUrl(data.path);
+
+          imageUrls.push(publicUrl.publicUrl);
+          console.log(`✅ CreatePost: Image ${i + 1} uploaded:`, publicUrl.publicUrl);
+        } catch (uploadErr) {
+          console.error(`❌ Failed to upload image ${i + 1}:`, uploadErr);
+          throw new Error(`Failed to upload image ${i + 1}`);
+        }
+      }
+
+      toast.dismiss();
+
+      // Create the post
       const postData = {
         user_id: user.id,
         content: postText.trim(),
-        image_url: uploadedMedia || null,
+        image_url: imageUrls[0] || null, // Keep first image for backwards compatibility
+        images_count: imageUrls.length,
       };
 
-      const { data, error: insertError } = await supabase
+      const { data: post, error: insertError } = await supabase
         .from('posts')
         .insert(postData)
         .select()
@@ -134,13 +157,37 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         throw insertError;
       }
 
-      console.log('✅ CreatePost: Post created successfully:', data);
+      console.log('✅ CreatePost: Post created successfully:', post);
+
+      // Insert all images into post_images table
+      if (imageUrls.length > 0) {
+        const postImages = imageUrls.map((url, index) => ({
+          post_id: post.id,
+          image_url: url,
+          image_order: index + 1,
+        }));
+
+        const { error: imagesError } = await supabase
+          .from('post_images')
+          .insert(postImages);
+
+        if (imagesError) {
+          console.error('❌ CreatePost: Error inserting images:', imagesError);
+          // Don't throw - post is already created
+        } else {
+          console.log('✅ CreatePost:', imageUrls.length, 'images linked to post');
+        }
+      }
+
+      // Cleanup preview URLs
+      uploadedImages.forEach(img => URL.revokeObjectURL(img.preview));
 
       // Reset form
       setPostText('');
-      setUploadedMedia(null);
-      setMediaType(null);
+      setUploadedImages([]);
       setError(null);
+
+      toast.success('Post created successfully!');
 
       // Notify parent component
       if (onPostCreated) {
@@ -149,8 +196,10 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
     } catch (err: any) {
       console.error('❌ CreatePost: Post creation failed:', err);
       setError(err.message || 'Failed to create post');
+      toast.error('Failed to create post');
     } finally {
       setPosting(false);
+      setUploading(false);
     }
   };
 
@@ -175,32 +224,40 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
             disabled={posting}
           />
 
-          {/* Media Preview */}
-          {uploadedMedia && (
-            <div className="mt-3 relative">
-              {mediaType === 'image' ? (
-                <img
-                  src={uploadedMedia}
-                  alt="Upload preview"
-                  className="max-h-64 rounded-lg object-cover w-full"
-                />
-              ) : (
-                <video
-                  src={uploadedMedia}
-                  controls
-                  className="max-h-64 rounded-lg w-full"
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setUploadedMedia(null);
-                  setMediaType(null);
-                }}
-                className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
+          {/* Images Preview Grid */}
+          {uploadedImages.length > 0 && (
+            <div className="mt-3">
+              <div className={`grid gap-2 ${
+                uploadedImages.length === 1 ? 'grid-cols-1' :
+                uploadedImages.length === 2 ? 'grid-cols-2' :
+                'grid-cols-3'
+              }`}>
+                {uploadedImages.map((image, index) => (
+                  <div key={index} className="relative group aspect-square">
+                    <img
+                      src={image.preview}
+                      alt={`Upload preview ${index + 1}`}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                    {/* Remove button */}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute top-2 right-2 w-7 h-7 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                    {/* Image number badge */}
+                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
+                      {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Image counter */}
+              <p className="text-xs text-gray-500 mt-2">
+                {uploadedImages.length} / 10 images
+              </p>
             </div>
           )}
 
@@ -216,14 +273,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            const type = file.type.startsWith('image/') ? 'image' : 'video';
-            handleFileUpload(e, type);
-          }
-        }}
+        accept="image/*"
+        multiple
+        onChange={handleImageSelect}
         className="hidden"
       />
 
@@ -234,20 +286,22 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
             size="sm"
             className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || posting || !!uploadedMedia}
+            disabled={uploading || posting || uploadedImages.length >= 10}
           >
             {uploading ? (
               <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 animate-spin" />
             ) : (
               <Image className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             )}
-            <span className="hidden sm:inline text-xs sm:text-sm">Photo/Video</span>
+            <span className="hidden sm:inline text-xs sm:text-sm">
+              {uploadedImages.length > 0 ? `Add More (${uploadedImages.length}/10)` : 'Photos'}
+            </span>
           </Button>
         </div>
         <Button
           className="bg-gradient-to-r from-purple-600 to-pink-600 h-8 sm:h-9 px-4 sm:px-6 text-sm sm:text-base"
           onClick={handlePost}
-          disabled={posting || uploading || (!postText.trim() && !uploadedMedia)}
+          disabled={posting || uploading || (!postText.trim() && uploadedImages.length === 0)}
         >
           {posting ? (
             <>

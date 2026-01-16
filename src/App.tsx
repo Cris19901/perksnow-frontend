@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -17,10 +17,24 @@ import { SettingsPage } from './components/pages/SettingsPage';
 import { ReelsPage } from './components/pages/ReelsPage';
 import { PointsPage } from './components/pages/PointsPage';
 import { AdminWithdrawalsPage } from './components/pages/AdminWithdrawalsPage';
+import { AdminSettingsPage } from './components/pages/AdminSettingsPage';
+import { AdminDashboard } from './components/pages/AdminDashboard';
+import { AdminPointSettingsPage } from './components/pages/AdminPointSettingsPage';
+import { AdminReferralSettingsPage } from './components/pages/AdminReferralSettingsPage';
+import { AdminSignupBonusPage } from './components/pages/AdminSignupBonusPage';
+import { AdminUserManagementPage } from './components/pages/AdminUserManagementPage';
+import AdminContentModerationPage from './components/pages/AdminContentModerationPage';
 import { HashtagPage } from './components/pages/HashtagPage';
+import { PeoplePage } from './components/pages/PeoplePage';
+import SubscriptionPage from './components/pages/SubscriptionPage';
+import PaymentCallbackPage from './components/pages/PaymentCallbackPage';
+import { ReferralDashboardPage } from './components/pages/ReferralDashboardPage';
+import { WithdrawPage } from './components/pages/WithdrawPage';
+import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
-import { toast, Toaster } from 'sonner@2.0.3';
+import { supabase } from './lib/supabase';
+import { toast, Toaster } from 'sonner';
 
 interface CartItem {
   id: number;
@@ -125,10 +139,44 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
+  const { user } = useAuth();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  // Check if user needs onboarding
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!user) {
+        setCheckingOnboarding(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('onboarding_completed')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        // Show onboarding if not completed
+        if (data && !data.onboarding_completed) {
+          setShowOnboarding(true);
+        }
+      } catch (err) {
+        console.error('Error checking onboarding:', err);
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    };
+
+    checkOnboarding();
+  }, [user]);
 
   const handleAddToCart = (productId: number) => {
     const product = productsDB[productId];
@@ -201,9 +249,18 @@ function AppContent() {
   return (
     <>
       <Toaster position="top-center" richColors />
+
+      {/* Onboarding Flow */}
+      {showOnboarding && !checkingOnboarding && (
+        <OnboardingFlow
+          onComplete={() => setShowOnboarding(false)}
+          onSkip={() => setShowOnboarding(false)}
+        />
+      )}
+
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<LandingPage onNavigate={(page) => window.location.href = `/${page}`} />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/about" element={<AboutPage />} />
@@ -251,6 +308,29 @@ function AppContent() {
               <ProfilePage
                 onCartClick={handleCartClick}
                 onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/:username"
+          element={
+            <ProtectedRoute>
+              <ProfilePage
+                onCartClick={handleCartClick}
+                onAddToCart={handleAddToCart}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/people"
+          element={
+            <ProtectedRoute>
+              <PeoplePage
+                onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />
             </ProtectedRoute>
@@ -334,6 +414,33 @@ function AppContent() {
           }
         />
         <Route
+          path="/referrals"
+          element={
+            <ProtectedRoute>
+              <ReferralDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/withdraw"
+          element={
+            <ProtectedRoute>
+              <WithdrawPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/withdrawals"
           element={
             <ProtectedRoute>
@@ -341,6 +448,88 @@ function AppContent() {
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute>
+              <AdminSettingsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/point-settings"
+          element={
+            <ProtectedRoute>
+              <AdminPointSettingsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/referral-settings"
+          element={
+            <ProtectedRoute>
+              <AdminReferralSettingsPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/signup-bonus"
+          element={
+            <ProtectedRoute>
+              <AdminSignupBonusPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute>
+              <AdminUserManagementPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/moderation"
+          element={
+            <ProtectedRoute>
+              <AdminContentModerationPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription/callback"
+          element={
+            <ProtectedRoute>
+              <PaymentCallbackPage />
             </ProtectedRoute>
           }
         />

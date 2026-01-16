@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { Header } from '../Header';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -7,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Post } from '../Post';
 import { ProductCard } from '../ProductCard';
 import { MobileBottomNav } from '../MobileBottomNav';
-import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus } from 'lucide-react';
+import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus, UserPlus, UserCheck, Loader2, BadgeCheck } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -19,11 +20,11 @@ interface ProfilePageProps {
   onCartClick?: () => void;
   onAddToCart?: (id: number) => void;
   cartItemsCount?: number;
-  isOwnProfile?: boolean;
 }
 
-export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCount, isOwnProfile = true }: ProfilePageProps) {
+export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCount }: ProfilePageProps) {
   const { user } = useAuth();
+  const { username } = useParams<{ username?: string }>();
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -31,39 +32,90 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const [error, setError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // Determine if viewing own profile
+  const isOwnProfile = !username || (user && profile && user.id === profile.id);
+
   useEffect(() => {
-    console.log('🔍 ProfilePage: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
-    if (user) {
-      fetchProfileData();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+    console.log('🔍 ProfilePage: User state:', user ? `Logged in as ${user.id}` : 'Not logged in', 'Viewing username:', username);
+    fetchProfileData();
+  }, [user, username]);
 
   const fetchProfileData = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 ProfilePage: Fetching profile data for user:', user?.id);
 
-      // Fetch user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user?.id)
-        .single();
+      let profileData;
+      let targetUserId;
 
-      if (profileError) {
-        console.error('❌ ProfilePage: Error fetching profile:', profileError);
-        throw profileError;
+      // Determine which profile to fetch
+      if (username) {
+        // Viewing another user's profile by username
+        console.log('🔍 ProfilePage: Fetching profile for username:', username);
+        const { data, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('username', username)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('❌ ProfilePage: Error fetching profile:', profileError);
+          throw profileError;
+        }
+
+        if (!data) {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
+
+        profileData = data;
+        targetUserId = data.id;
+
+        // Check if current user is following this profile
+        if (user && targetUserId !== user.id) {
+          const { data: followData } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', targetUserId)
+            .maybeSingle();
+
+          setIsFollowing(!!followData);
+        }
+      } else {
+        // Viewing own profile
+        if (!user) {
+          setError('Not logged in');
+          setLoading(false);
+          return;
+        }
+
+        console.log('🔍 ProfilePage: Fetching own profile for user:', user.id);
+        const { data, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('❌ ProfilePage: Error fetching profile:', profileError);
+          throw profileError;
+        }
+
+        profileData = data;
+        targetUserId = user.id;
       }
+
       console.log('✅ ProfilePage: Profile data:', profileData);
       setProfile(profileData);
 
-      // Fetch user's posts
+      // Fetch user's posts (using targetUserId)
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
         .select(`
@@ -75,13 +127,13 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
             avatar_url
           )
         `)
-        .eq('user_id', user?.id)
+        .eq('user_id', targetUserId)
         .order('created_at', { ascending: false });
 
       if (postsError) throw postsError;
       setPosts(postsData || []);
 
-      // Fetch user's products
+      // Fetch user's products (using targetUserId)
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
@@ -93,7 +145,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
             avatar_url
           )
         `)
-        .eq('seller_id', user?.id)
+        .eq('seller_id', targetUserId)
         .order('created_at', { ascending: false});
 
       if (productsError) throw productsError;
@@ -200,6 +252,55 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     } finally {
       setUploadingCover(false);
       if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!user || !profile) return;
+
+    setFollowLoading(true);
+    try {
+      const { error } = await supabase.from('follows').insert({
+        follower_id: user.id,
+        following_id: profile.id
+      });
+
+      if (error) throw error;
+      setIsFollowing(true);
+
+      // Update follower count optimistically
+      setProfile({ ...profile, followers_count: (profile.followers_count || 0) + 1 });
+      toast.success('Following user');
+    } catch (err) {
+      console.error('Error following:', err);
+      toast.error('Failed to follow user');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleUnfollow = async () => {
+    if (!user || !profile) return;
+
+    setFollowLoading(true);
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', user.id)
+        .eq('following_id', profile.id);
+
+      if (error) throw error;
+      setIsFollowing(false);
+
+      // Update follower count optimistically
+      setProfile({ ...profile, followers_count: Math.max(0, (profile.followers_count || 0) - 1) });
+      toast.success('Unfollowed user');
+    } catch (err) {
+      console.error('Error unfollowing:', err);
+      toast.error('Failed to unfollow user');
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -355,7 +456,14 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold mb-1">{profile.full_name || profile.username}</h1>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h1 className="text-2xl sm:text-3xl font-bold">{profile.full_name || profile.username}</h1>
+                      {profile.subscription_tier === 'pro' &&
+                       profile.subscription_status === 'active' &&
+                       (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date()) && (
+                        <BadgeCheck className="w-6 h-6 sm:w-7 sm:h-7 text-blue-500 flex-shrink-0" title="Verified Pro User" />
+                      )}
+                    </div>
                     <p className="text-gray-500 mb-2">@{profile.username}</p>
                     <p className="text-gray-700 mb-3">
                       {profile.bio || 'No bio yet'}
@@ -397,7 +505,26 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                     ) : (
                       <>
                         <Button variant="outline">Message</Button>
-                        <Button className="bg-gradient-to-r from-purple-600 to-pink-600">Follow</Button>
+                        <Button
+                          onClick={isFollowing ? handleUnfollow : handleFollow}
+                          disabled={followLoading}
+                          className={isFollowing ? '' : 'bg-gradient-to-r from-purple-600 to-pink-600'}
+                          variant={isFollowing ? 'outline' : 'default'}
+                        >
+                          {followLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : isFollowing ? (
+                            <>
+                              <UserCheck className="w-4 h-4 mr-2" />
+                              Following
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4 mr-2" />
+                              Follow
+                            </>
+                          )}
+                        </Button>
                       </>
                     )}
                   </div>

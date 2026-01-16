@@ -1,6 +1,9 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Play, Eye, Heart, MessageCircle, Share2, Maximize2 } from 'lucide-react';
+import { Play, Eye, Heart, MessageCircle, Share2, Maximize2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface ReelPostProps {
   reel_id: string;
@@ -15,7 +18,9 @@ interface ReelPostProps {
   likes_count: number;
   comments_count: number;
   created_at: string;
-  onReelClick?: (reelId: string) => void;
+  is_liked?: boolean;
+  onReelClick?: (reelId: string, showComments?: boolean) => void;
+  onLikeUpdate?: (reelId: string, liked: boolean, newCount: number) => void;
 }
 
 export function ReelPost({
@@ -30,8 +35,15 @@ export function ReelPost({
   likes_count,
   comments_count,
   created_at,
+  is_liked = false,
   onReelClick,
+  onLikeUpdate,
 }: ReelPostProps) {
+  const { user } = useAuth();
+  const [liked, setLiked] = useState(is_liked);
+  const [currentLikesCount, setCurrentLikesCount] = useState(likes_count);
+  const [isLiking, setIsLiking] = useState(false);
+
   const formatCount = (count: number): string => {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
@@ -47,6 +59,83 @@ export function ReelPost({
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     return `${Math.floor(seconds / 86400)}d ago`;
+  };
+
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent opening reel viewer
+
+    if (!user) {
+      toast.error('Please log in to like reels');
+      return;
+    }
+
+    if (isLiking) return;
+
+    try {
+      setIsLiking(true);
+
+      if (liked) {
+        // Unlike
+        const { error } = await supabase
+          .from('reel_likes')
+          .delete()
+          .eq('reel_id', reel_id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        const newCount = Math.max(0, currentLikesCount - 1);
+        setLiked(false);
+        setCurrentLikesCount(newCount);
+        onLikeUpdate?.(reel_id, false, newCount);
+        toast.success('Unliked');
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('reel_likes')
+          .insert({ reel_id, user_id: user.id });
+
+        if (error) throw error;
+
+        const newCount = currentLikesCount + 1;
+        setLiked(true);
+        setCurrentLikesCount(newCount);
+        onLikeUpdate?.(reel_id, true, newCount);
+        toast.success('Liked!');
+      }
+    } catch (err: any) {
+      console.error('Error toggling like:', err);
+      toast.error('Failed to update like');
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handleComment = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Open reel viewer with comments open
+    onReelClick?.(reel_id, true);
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const shareData = {
+      title: `Check out this reel by ${full_name}`,
+      text: caption,
+      url: `${window.location.origin}/reels?id=${reel_id}`
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        toast.success('Link copied to clipboard!');
+      }
+    } catch (err) {
+      console.log('Share failed:', err);
+    }
   };
 
   return (
@@ -115,21 +204,46 @@ export function ReelPost({
       {/* Stats & Actions */}
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 text-gray-600">
-            <span className="flex items-center gap-1.5 text-sm">
+          <div className="flex items-center gap-4">
+            {/* Views */}
+            <span className="flex items-center gap-1.5 text-sm text-gray-600">
               <Eye className="w-4 h-4" />
               {formatCount(views_count)}
             </span>
-            <span className="flex items-center gap-1.5 text-sm">
-              <Heart className="w-4 h-4" />
-              {formatCount(likes_count)}
-            </span>
-            <span className="flex items-center gap-1.5 text-sm">
+
+            {/* Like Button */}
+            <button
+              onClick={handleLike}
+              disabled={isLiking}
+              className={`flex items-center gap-1.5 text-sm transition-colors ${
+                liked
+                  ? 'text-red-500 hover:text-red-600'
+                  : 'text-gray-600 hover:text-red-500'
+              }`}
+            >
+              {isLiking ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
+              )}
+              {formatCount(currentLikesCount)}
+            </button>
+
+            {/* Comment Button */}
+            <button
+              onClick={handleComment}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-purple-600 transition-colors"
+            >
               <MessageCircle className="w-4 h-4" />
               {formatCount(comments_count)}
-            </span>
+            </button>
           </div>
-          <button className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-purple-600 transition-colors">
+
+          {/* Share Button */}
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-purple-600 transition-colors"
+          >
             <Share2 className="w-4 h-4" />
             Share
           </button>

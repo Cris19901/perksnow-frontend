@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, DollarSign, CreditCard, Smartphone, Wallet, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, DollarSign, CreditCard, Smartphone, Wallet, AlertCircle, Crown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -18,11 +19,12 @@ interface WithdrawalModalProps {
 
 // Conversion rate: 10 points = 1 NGN
 const POINTS_TO_NGN = 0.1; // 1 point = 0.1 NGN (or 10 points = 1 NGN)
-const MIN_WITHDRAWAL_POINTS = 20000; // Minimum 20,000 points (= 2,000 NGN)
+const MIN_WITHDRAWAL_POINTS = 5000; // Minimum 5,000 points (= 500 NGN) - lowered for first withdrawal
 const WITHDRAWAL_FREQUENCY_DAYS = 15; // Can withdraw once every 15 days
 
 export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess }: WithdrawalModalProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [pointsToWithdraw, setPointsToWithdraw] = useState<string>('');
   const [withdrawalMethod, setWithdrawalMethod] = useState<'bank' | 'opay'>('bank');
   const [selectedCurrency, setSelectedCurrency] = useState<'NGN' | 'USD' | 'EUR' | 'GBP'>('NGN');
@@ -44,6 +46,8 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
   const [nextWithdrawalDate, setNextWithdrawalDate] = useState<string | null>(null);
   const [hasActiveMembership, setHasActiveMembership] = useState(false);
   const [ineligibilityReason, setIneligibilityReason] = useState<string>('');
+  const [maxWithdrawalPoints, setMaxWithdrawalPoints] = useState<number>(999999999);
+  const [withdrawalCount, setWithdrawalCount] = useState<number>(0);
 
   const points = parseInt(pointsToWithdraw) || 0;
   const ngnAmount = points * POINTS_TO_NGN;
@@ -92,26 +96,36 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
     try {
       setEligibilityChecking(true);
 
-      // Check for active membership
-      const { data: activeSub, error: subError } = await supabase
-        .from('user_subscriptions')
-        .select('id, end_date, status')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .gt('end_date', new Date().toISOString())
-        .single();
+      // Check if user can withdraw using the Supabase function
+      const { data: canWithdrawData, error: withdrawError } = await supabase
+        .rpc('can_user_withdraw', { p_user_id: user.id });
 
-      if (subError && subError.code !== 'PGRST116') {
-        console.log('Note: user_subscriptions table may not exist yet');
-        // If table doesn't exist, allow withdrawal for now
-        setHasActiveMembership(true);
-      } else if (!activeSub) {
-        setCanWithdraw(false);
-        setHasActiveMembership(false);
-        setIneligibilityReason('You need an active membership to request withdrawals');
-        return;
+      if (withdrawError) {
+        console.error('Error checking withdrawal eligibility:', withdrawError);
+        // Default to checking user's subscription tier directly
+        const { data: userData } = await supabase
+          .from('users')
+          .select('subscription_tier, subscription_status, subscription_expires_at')
+          .eq('id', user.id)
+          .single();
+
+        const isPro = userData?.subscription_tier === 'pro'
+          && userData?.subscription_status === 'active'
+          && (!userData?.subscription_expires_at || new Date(userData.subscription_expires_at) > new Date());
+
+        setHasActiveMembership(isPro);
+        if (!isPro) {
+          setCanWithdraw(false);
+          setIneligibilityReason('You need an active Pro subscription to withdraw earnings');
+          return;
+        }
       } else {
-        setHasActiveMembership(true);
+        setHasActiveMembership(canWithdrawData);
+        if (!canWithdrawData) {
+          setCanWithdraw(false);
+          setIneligibilityReason('You need an active Pro subscription to withdraw earnings');
+          return;
+        }
       }
 
       // Check last withdrawal date
@@ -149,6 +163,24 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
           setIneligibilityReason(`You can request another withdrawal on ${nextDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`);
           return;
         }
+      }
+
+      // Get user's withdrawal count and max amount
+      const { data: userData } = await supabase
+        .from('users')
+        .select('successful_withdrawals_count')
+        .eq('id', user.id)
+        .single();
+
+      const count = userData?.successful_withdrawals_count || 0;
+      setWithdrawalCount(count);
+
+      // Get max withdrawal amount from database function
+      const { data: maxAmount, error: maxError } = await supabase
+        .rpc('get_max_withdrawal_amount', { p_user_id: user.id });
+
+      if (!maxError && maxAmount) {
+        setMaxWithdrawalPoints(maxAmount);
       }
 
       setCanWithdraw(true);
@@ -208,6 +240,14 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
     // Validation
     if (points < MIN_WITHDRAWAL_POINTS) {
       toast.error(`Minimum withdrawal is ${MIN_WITHDRAWAL_POINTS.toLocaleString()} points`);
+      return;
+    }
+
+    // Check progressive withdrawal limit
+    if (points > maxWithdrawalPoints) {
+      const withdrawalNumber = withdrawalCount + 1;
+      const ngnAmount = (maxWithdrawalPoints * POINTS_TO_NGN).toLocaleString();
+      toast.error(`Withdrawal #${withdrawalNumber} is limited to ${maxWithdrawalPoints.toLocaleString()} points (₦${ngnAmount})`);
       return;
     }
 
@@ -324,16 +364,17 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
             {!hasActiveMembership ? (
               <>
                 <p className="text-sm text-gray-500 mb-4">
-                  Subscribe to a membership plan to unlock withdrawal features
+                  Upgrade to Pro to unlock withdrawal features and start earning real money!
                 </p>
                 <Button
                   onClick={() => {
                     onOpenChange(false);
-                    // TODO: Navigate to subscription page
+                    navigate('/subscription');
                   }}
-                  className="mt-2 bg-purple-600 hover:bg-purple-700"
+                  className="mt-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                 >
-                  View Membership Plans
+                  <Crown className="w-4 h-4 mr-2" />
+                  Upgrade to Pro
                 </Button>
               </>
             ) : nextWithdrawalDate ? (
@@ -367,13 +408,19 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
                 id="points"
                 type="number"
                 min={MIN_WITHDRAWAL_POINTS}
-                max={currentBalance}
+                max={Math.min(currentBalance, maxWithdrawalPoints)}
                 value={pointsToWithdraw}
                 onChange={(e) => setPointsToWithdraw(e.target.value)}
                 placeholder={`Enter points (min ${MIN_WITHDRAWAL_POINTS.toLocaleString()})`}
                 required
                 className="mt-1"
               />
+              {maxWithdrawalPoints < 999999999 && (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Withdrawal #{withdrawalCount + 1} limit: {maxWithdrawalPoints.toLocaleString()} points (₦{(maxWithdrawalPoints * POINTS_TO_NGN).toLocaleString()})
+                </p>
+              )}
             </div>
 
             {/* Currency Selection */}

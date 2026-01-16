@@ -1,5 +1,5 @@
 {
-      "name": "Social Media Platform",
+      "name": "LavLay",
       "version": "0.1.0",
       "private": true,
       "dependencies": {
@@ -51,15 +51,25 @@
       },
       "devDependencies": {
             "@tailwindcss/vite": "^4.1.17",
+            "@testing-library/jest-dom": "^6.9.1",
+            "@testing-library/react": "^16.3.1",
+            "@testing-library/user-event": "^14.6.1",
             "@types/node": "^20.10.0",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "@vitest/ui": "^4.0.16",
             "autoprefixer": "^10.4.21",
+            "jsdom": "^27.4.0",
             "postcss": "^8.5.6",
             "tailwindcss": "^4.1.17",
-            "vite": "6.3.5"
+            "vite": "6.3.5",
+            "vitest": "^4.0.16"
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
+            "build": "vite build",
+            "test": "vitest",
+            "test:ui": "vitest --ui",
+            "test:run": "vitest run",
+            "test:coverage": "vitest run --coverage"
       }
 }

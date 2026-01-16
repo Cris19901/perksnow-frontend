@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/lib/supabase';
 
 export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
   const { signUp } = useAuth();
@@ -12,9 +13,20 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
     password: '',
     username: '',
     full_name: '',
+    phone_number: '',
+    referral_code: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+      setFormData(prev => ({ ...prev, referral_code: refCode }));
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({
@@ -29,7 +41,21 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
     setLoading(true);
 
     try {
-      await signUp(formData);
+      const result = await signUp(formData);
+
+      // Track referral if code was provided
+      if (formData.referral_code && result.user) {
+        try {
+          await supabase.rpc('track_referral', {
+            p_referee_id: result.user.id,
+            p_referral_code: formData.referral_code.toUpperCase()
+          });
+        } catch (refErr) {
+          console.error('Failed to track referral:', refErr);
+          // Don't fail signup if referral tracking fails
+        }
+      }
+
       onSuccess?.();
     } catch (err: any) {
       setError(err.message || 'Failed to sign up');
@@ -42,7 +68,7 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle>Create Account</CardTitle>
-        <CardDescription>Join SocialHub to connect and shop</CardDescription>
+        <CardDescription>Join LavLay to connect and shop</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -80,6 +106,19 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="phone_number">Phone Number (Optional)</Label>
+            <Input
+              id="phone_number"
+              name="phone_number"
+              type="tel"
+              placeholder="+234 800 000 0000"
+              value={formData.phone_number}
+              onChange={handleChange}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="signup-email">Email</Label>
             <Input
               id="signup-email"
@@ -108,6 +147,23 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
             />
             <p className="text-xs text-muted-foreground">
               Password must be at least 6 characters
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="referral_code">Referral Code (Optional)</Label>
+            <Input
+              id="referral_code"
+              name="referral_code"
+              type="text"
+              placeholder="Enter referral code"
+              value={formData.referral_code}
+              onChange={handleChange}
+              disabled={loading}
+              className="uppercase"
+            />
+            <p className="text-xs text-muted-foreground">
+              Have a referral code? Enter it to reward your friend!
             </p>
           </div>
         </CardContent>

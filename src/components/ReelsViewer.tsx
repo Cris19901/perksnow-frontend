@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, MessageCircle, Share2, MoreVertical, Volume2, VolumeX, User } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreVertical, Volume2, VolumeX, User, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -27,16 +27,18 @@ interface Reel {
 
 interface ReelsViewerProps {
   initialReelId?: string;
+  openComments?: boolean;
   onClose?: () => void;
 }
 
-export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
+export function ReelsViewer({ initialReelId, openComments = false, onClose }: ReelsViewerProps) {
   const { user } = useAuth();
   const [reels, setReels] = useState<Reel[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [muted, setMuted] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(openComments);
+  const [isLiking, setIsLiking] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const [viewTracked, setViewTracked] = useState<Set<string>>(new Set());
@@ -117,36 +119,48 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
       return;
     }
 
+    if (isLiking) return;
+
     try {
+      setIsLiking(true);
+
       if (reel.is_liked) {
         // Unlike
-        await supabase
+        const { error } = await supabase
           .from('reel_likes')
           .delete()
           .eq('reel_id', reel.reel_id)
           .eq('user_id', user.id);
 
+        if (error) throw error;
+
         setReels(prev => prev.map(r =>
           r.reel_id === reel.reel_id
-            ? { ...r, is_liked: false, likes_count: r.likes_count - 1 }
+            ? { ...r, is_liked: false, likes_count: Math.max(0, r.likes_count - 1) }
             : r
         ));
+        toast.success('Reel unliked');
       } else {
         // Like
-        await supabase.from('reel_likes').insert({
+        const { error } = await supabase.from('reel_likes').insert({
           reel_id: reel.reel_id,
           user_id: user.id
         });
+
+        if (error) throw error;
 
         setReels(prev => prev.map(r =>
           r.reel_id === reel.reel_id
             ? { ...r, is_liked: true, likes_count: r.likes_count + 1 }
             : r
         ));
+        toast.success('Reel liked');
       }
     } catch (err: any) {
       console.error('Error toggling like:', err);
       toast.error('Failed to update like');
+    } finally {
+      setIsLiking(false);
     }
   };
 
@@ -310,7 +324,7 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="text-white"
+                className="text-white hover:text-red-400 hover:bg-white/20 transition-colors text-2xl font-bold h-10 w-10 p-0 rounded-full"
               >
                 ✕
               </Button>
@@ -357,6 +371,7 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
                 {/* Like Button */}
                 <button
                   onClick={() => toggleLike(currentReel)}
+                  disabled={isLiking}
                   className="flex flex-col items-center gap-1"
                 >
                   <div className={`p-3 rounded-full ${
@@ -364,13 +379,17 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
                       ? 'bg-red-500'
                       : 'bg-white/20 backdrop-blur-sm'
                   }`}>
-                    <Heart
-                      className={`w-6 h-6 ${
-                        currentReel.is_liked
-                          ? 'text-white fill-white'
-                          : 'text-white'
-                      }`}
-                    />
+                    {isLiking ? (
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    ) : (
+                      <Heart
+                        className={`w-6 h-6 ${
+                          currentReel.is_liked
+                            ? 'text-white fill-white'
+                            : 'text-white'
+                        }`}
+                      />
+                    )}
                   </div>
                   <span className="text-white text-xs font-medium">
                     {formatCount(currentReel.likes_count)}
@@ -439,6 +458,13 @@ export function ReelsViewer({ initialReelId, onClose }: ReelsViewerProps) {
           <ReelComments
             reelId={currentReel.reel_id}
             onClose={() => setShowComments(false)}
+            onCommentAdded={() => {
+              setReels(prev => prev.map(reel =>
+                reel.reel_id === currentReel.reel_id
+                  ? { ...reel, comments_count: reel.comments_count + 1 }
+                  : reel
+              ));
+            }}
           />
         </SheetContent>
       </Sheet>

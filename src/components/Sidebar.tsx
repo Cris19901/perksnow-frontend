@@ -1,11 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
-import { TrendingUp, UserPlus, Loader2, UserCheck } from 'lucide-react';
+import { TrendingUp, UserPlus, Loader2, UserCheck, Crown, Sparkles, Gift, Users2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { sendFollowerNotification } from '@/lib/email';
 
 interface SuggestedUser {
   id: string;
@@ -30,14 +31,44 @@ export function Sidebar() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [followingInProgress, setFollowingInProgress] = useState<Set<string>>(new Set());
+  const [subscriptionTier, setSubscriptionTier] = useState<string>('free');
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   useEffect(() => {
     fetchSuggestedUsers();
     fetchTrending();
     if (user) {
       fetchFollowing();
+      fetchSubscriptionTier();
     }
   }, [user]);
+
+  const fetchSubscriptionTier = async () => {
+    if (!user) return;
+
+    try {
+      setLoadingSubscription(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('subscription_tier, subscription_status, subscription_expires_at')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      // Check if user has active Pro subscription
+      const isPro = data?.subscription_tier === 'pro'
+        && data?.subscription_status === 'active'
+        && (!data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date());
+
+      setSubscriptionTier(isPro ? 'pro' : 'free');
+    } catch (err) {
+      console.error('Error fetching subscription tier:', err);
+      setSubscriptionTier('free');
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
 
   const fetchFollowing = async () => {
     if (!user) return;
@@ -186,6 +217,33 @@ export function Sidebar() {
 
         setFollowingIds(prev => new Set(prev).add(targetUserId));
         toast.success('Following successfully');
+
+        // Send follower notification email
+        const targetUser = suggestedUsers.find(u => u.id === targetUserId);
+        if (targetUser) {
+          // Get target user's email
+          const { data: targetUserData } = await supabase
+            .from('users')
+            .select('email, full_name, username')
+            .eq('id', targetUserId)
+            .single();
+
+          // Get current user's info
+          const { data: currentUserData } = await supabase
+            .from('users')
+            .select('full_name, username')
+            .eq('id', user.id)
+            .single();
+
+          if (targetUserData?.email && currentUserData) {
+            sendFollowerNotification(
+              targetUserData.email,
+              targetUserData.full_name || targetUserData.username,
+              currentUserData.full_name || currentUserData.username,
+              currentUserData.username
+            ).catch(err => console.error('Follower notification failed:', err));
+          }
+        }
       }
     } catch (err: any) {
       console.error('Error toggling follow:', err);
@@ -201,6 +259,58 @@ export function Sidebar() {
 
   return (
     <div className="space-y-4">
+      {/* Referral Program Card */}
+      {user && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 bg-green-600 rounded-lg">
+              <Gift className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 mb-1">Earn with Referrals</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Invite friends and earn 20 points + 5% of their deposits
+              </p>
+              <Button
+                size="sm"
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={() => navigate('/referrals')}
+              >
+                <Users2 className="w-4 h-4 mr-2" />
+                View Referral Dashboard
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade to Pro Banner (Only for Free Users) */}
+      {!loadingSubscription && subscriptionTier === 'free' && user && (
+        <div className="bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-lg p-4 text-white shadow-lg">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <Crown className="w-5 h-5 text-yellow-300" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-lg mb-1 flex items-center gap-2">
+                Upgrade to Pro
+                <Sparkles className="w-4 h-4 text-yellow-300" />
+              </h3>
+              <p className="text-sm text-white/90 leading-relaxed">
+                Unlock withdrawals, verified badge, unlimited posts & reels, and priority support!
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={() => navigate('/subscription')}
+            className="w-full bg-white text-purple-600 hover:bg-gray-100 font-semibold"
+            size="sm"
+          >
+            View Plans
+          </Button>
+        </div>
+      )}
+
       {/* Suggested for you */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
@@ -223,7 +333,10 @@ export function Sidebar() {
 
               return (
                 <div key={userItem.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity flex-1"
+                    onClick={() => navigate(`/profile/${userItem.username}`)}
+                  >
                     <Avatar>
                       <AvatarImage src={getAvatarUrl(userItem)} />
                       <AvatarFallback>
@@ -231,7 +344,7 @@ export function Sidebar() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm">{userItem.full_name || userItem.username}</p>
+                      <p className="text-sm font-medium hover:underline">{userItem.full_name || userItem.username}</p>
                       <p className="text-xs text-gray-500">
                         {formatCount(userItem.followers_count || 0)} followers
                       </p>

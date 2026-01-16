@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export function SignupPage() {
   const { signUp } = useAuth();
@@ -51,6 +52,12 @@ export function SignupPage() {
         full_name: fullName,
       });
       console.log('✅ SignupPage: Signup successful');
+
+      // Send welcome email (don't await - send in background)
+      sendWelcomeEmail(formData.email, fullName).catch(err =>
+        console.error('Welcome email failed:', err)
+      );
+
       navigate('/feed');
     } catch (err: any) {
       console.error('❌ SignupPage: Signup failed:', err);
@@ -75,9 +82,9 @@ export function SignupPage() {
               className="flex items-center gap-2 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                <span className="text-white">S</span>
+                <span className="text-white font-bold">L</span>
               </div>
-              <span className="text-xl">SocialHub</span>
+              <span className="text-xl font-semibold">LavLay</span>
             </Link>
           </div>
         </div>
@@ -89,7 +96,7 @@ export function SignupPage() {
           {/* Left Side - Branding */}
           <div className="hidden lg:block">
             <div className="space-y-6">
-              <h1 className="text-5xl">Join SocialHub today</h1>
+              <h1 className="text-5xl">Join LavLay today</h1>
               <p className="text-xl text-gray-600">
                 Create your account and start connecting with friends, family, and communities around the world.
               </p>

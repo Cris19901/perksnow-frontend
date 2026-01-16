@@ -24,13 +24,19 @@ interface HeaderProps {
 export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const currentPage = location.pathname.slice(1) || 'feed';
 
   const handleLogout = async () => {
     await signOut();
     navigate('/');
   };
+
+  // Get user's avatar and initials
+  const userAvatar = user?.avatar_url || '';
+  const userInitials = user?.full_name
+    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.username?.slice(0, 2).toUpperCase() || 'ME';
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
       <div className="max-w-[1400px] mx-auto px-4">
@@ -38,9 +44,9 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
           {/* Logo */}
           <Link to="/feed" className="flex items-center gap-2 cursor-pointer">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-              <span className="text-white">S</span>
+              <span className="text-white font-bold">L</span>
             </div>
-            <span className="hidden sm:block">SocialHub</span>
+            <span className="hidden sm:block font-semibold text-lg">LavLay</span>
           </Link>
 
           {/* Search - Hidden on mobile */}
@@ -109,8 +115,8 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarImage src="https://images.unsplash.com/photo-1653691040409-793d2c22ed69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMHBlb3BsZXxlbnwxfHx8fDE3NjI1OTM0NzJ8MA&ixlib=rb-4.1.0&q=80&w=1080" />
-                  <AvatarFallback>ME</AvatarFallback>
+                  <AvatarImage src={userAvatar} />
+                  <AvatarFallback>{userInitials}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -202,12 +208,12 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
                       onClick={() => navigate('/profile')}
                     >
                       <Avatar>
-                        <AvatarImage src="https://images.unsplash.com/photo-1653691040409-793d2c22ed69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMHBlb3BsZXxlbnwxfHx8fDE3NjI1OTM0NzJ8MA&ixlib=rb-4.1.0&q=80&w=1080" />
-                        <AvatarFallback>ME</AvatarFallback>
+                        <AvatarImage src={userAvatar} />
+                        <AvatarFallback>{userInitials}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p>My Profile</p>
-                        <p className="text-sm text-gray-500">View profile</p>
+                        <p>{user?.full_name || user?.username || 'My Profile'}</p>
+                        <p className="text-sm text-gray-500">@{user?.username || 'username'}</p>
                       </div>
                     </div>
                     <div className="mt-2 space-y-2">
