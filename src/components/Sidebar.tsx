@@ -261,9 +261,9 @@ export function Sidebar() {
     <div className="space-y-4">
       {/* Referral Program Card */}
       {user && (
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200 p-4">
           <div className="flex items-start gap-3 mb-3">
-            <div className="p-2 bg-green-600 rounded-lg">
+            <div className="p-2 bg-amber-500 rounded-lg">
               <Gift className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
@@ -273,7 +273,7 @@ export function Sidebar() {
               </p>
               <Button
                 size="sm"
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
                 onClick={() => navigate('/referrals')}
               >
                 <Users2 className="w-4 h-4 mr-2" />
