@@ -350,7 +350,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
               {user && (
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200 p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 bg-amber-500 rounded-lg">
+                    <div className="p-2 bg-purple-600 rounded-lg">
                       <Gift className="w-5 h-5 text-white" />
                     </div>
                     <div className="flex-1">
@@ -360,7 +360,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                       </p>
                       <Button
                         size="sm"
-                        className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                         onClick={() => navigate('/referrals')}
                       >
                         <Users2 className="w-4 h-4 mr-2" />
