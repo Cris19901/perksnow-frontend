@@ -37,7 +37,9 @@
       "Bash(powershell -Command \"iwr -useb https://raw.githubusercontent.com/supabase/cli/main/install.ps1 | iex\")",
       "Bash(scoop --version:*)",
       "Bash(winget install:*)",
-      "Bash(winget search:*)"
+      "Bash(winget search:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []

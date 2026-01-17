@@ -36,3 +36,5 @@ lerna-debug.log*
 Thumbs.db
 .vercel
 .env*.local
+webcrqml_fadicaue_social (1).sql
+*.sql
