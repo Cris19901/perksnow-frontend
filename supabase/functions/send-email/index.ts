@@ -439,7 +439,7 @@ function getEmailTemplate(type: string, data: any): { subject: string; htmlBody:
                 </div>
 
                 <p style="text-align: center;">
-                  <a href="https://lavlay.com/@${data.follower_username}" class="button">View Profile</a>
+                  <a href="https://www.lavlay.com/profile/${data.follower_username}" class="button">View Profile</a>
                 </p>
 
                 <div class="info-box" style="background: #fef3c7; border-left-color: #f59e0b;">
