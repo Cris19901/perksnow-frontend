@@ -1,14 +1,17 @@
-import { Home, PlaySquare, User, TrendingUp, PlusCircle } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Home, PlaySquare, User, TrendingUp, PlusCircle, LogOut } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 export function MobileBottomNav() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPage = location.pathname.slice(1) || 'feed';
   const [pointsBalance, setPointsBalance] = useState(0);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     console.log('🔍 MobileBottomNav: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
@@ -57,6 +60,21 @@ export function MobileBottomNav() {
     return points.toString();
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+      navigate('/login');
+    } catch (error) {
+      toast.error('Failed to log out');
+    }
+  };
+
+  const handleCreateClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    toast.info('Marketplace coming soon! 🚀');
+  };
+
   const navItems = [
     {
       id: 'feed',
@@ -90,6 +108,13 @@ export function MobileBottomNav() {
       icon: User,
       label: 'Profile',
     },
+    {
+      id: 'logout',
+      path: '#',
+      icon: LogOut,
+      label: 'Logout',
+      isLogout: true,
+    },
   ];
 
   // Temporarily show nav even if not logged in for debugging
@@ -97,11 +122,41 @@ export function MobileBottomNav() {
   console.log('🎨 MobileBottomNav: Rendering bottom nav');
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
       <div className="flex items-center justify-around h-16 px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
+
+          // Handle logout button
+          if (item.isLogout) {
+            return (
+              <button
+                key={item.id}
+                onClick={handleLogout}
+                className="flex flex-col items-center justify-center flex-1 h-full transition-colors text-red-600"
+              >
+                <Icon className="w-6 h-6" />
+                <span className="text-xs mt-1">{item.label}</span>
+              </button>
+            );
+          }
+
+          // Handle create button (coming soon)
+          if (item.isCreate) {
+            return (
+              <button
+                key={item.id}
+                onClick={handleCreateClick}
+                className="flex flex-col items-center justify-center flex-1 h-full"
+              >
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 shadow-lg">
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xs mt-1 text-gray-600">{item.label}</span>
+              </button>
+            );
+          }
 
           return (
             <Link
@@ -111,14 +166,7 @@ export function MobileBottomNav() {
                 isActive ? 'text-purple-600' : 'text-gray-600'
               }`}
             >
-              {item.isCreate ? (
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg">
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-xs mt-1 text-gray-600">{item.label}</span>
-                </div>
-              ) : item.isPoints ? (
+              {item.isPoints ? (
                 <div className="flex flex-col items-center">
                   {isActive ? (
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
