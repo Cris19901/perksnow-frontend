@@ -33,11 +33,6 @@ function createR2Client() {
       accessKeyId: R2_ACCESS_KEY_ID,
       secretAccessKey: R2_SECRET_ACCESS_KEY,
     },
-    // Add timeout configuration
-    requestHandler: {
-      connectionTimeout: 30000, // 30 seconds
-      socketTimeout: 30000, // 30 seconds
-    },
   });
 }
 
