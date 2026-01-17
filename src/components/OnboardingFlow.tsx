@@ -14,12 +14,15 @@ import {
   ArrowLeft,
   X,
   Loader2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  UserPlus,
+  UserCheck,
+  Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { uploadImage } from '@/lib/image-upload';
+import { uploadImage } from '@/lib/image-upload-new';
 
 interface OnboardingFlowProps {
   onComplete?: () => void;
@@ -42,6 +45,14 @@ const INTEREST_OPTIONS = [
   'Health', 'Education', 'Entertainment', 'DIY', 'Pets'
 ];
 
+interface SuggestedUser {
+  id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  followers_count: number;
+}
+
 export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
@@ -57,7 +68,13 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
   const [location, setLocation] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
-  const totalSteps = 4;
+  // Friend suggestions state
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followingInProgress, setFollowingInProgress] = useState<Set<string>>(new Set());
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const totalSteps = 5;
 
   useEffect(() => {
     fetchProgress();
@@ -121,6 +138,89 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
         ? prev.filter(i => i !== interest)
         : [...prev, interest]
     );
+  };
+
+  const fetchSuggestedUsers = async () => {
+    if (!user) return;
+
+    try {
+      setLoadingUsers(true);
+
+      // Fetch users (excluding current user)
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url, followers_count')
+        .neq('id', user.id)
+        .order('followers_count', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      setSuggestedUsers(data || []);
+    } catch (err) {
+      console.error('Error fetching suggested users:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleFollow = async (targetUserId: string) => {
+    if (!user) return;
+
+    if (followingInProgress.has(targetUserId)) {
+      return; // Prevent double-clicking
+    }
+
+    try {
+      setFollowingInProgress(prev => new Set(prev).add(targetUserId));
+
+      const isFollowing = followingIds.has(targetUserId);
+
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', targetUserId);
+
+        if (error) throw error;
+
+        setFollowingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(targetUserId);
+          return newSet;
+        });
+
+        toast.success('Unfollowed');
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from('follows')
+          .insert({
+            follower_id: user.id,
+            following_id: targetUserId
+          });
+
+        if (error) throw error;
+
+        setFollowingIds(prev => new Set(prev).add(targetUserId));
+        toast.success('Following!');
+      }
+    } catch (err: any) {
+      console.error('Error toggling follow:', err);
+      toast.error('Failed to update follow status');
+    } finally {
+      setFollowingInProgress(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(targetUserId);
+        return newSet;
+      });
+    }
+  };
+
+  const getAvatarUrl = (userItem: SuggestedUser) => {
+    return userItem.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userItem.id}`;
   };
 
   const markStepComplete = async (stepName: string) => {
@@ -252,13 +352,11 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
     try {
       setLoading(true);
 
-      // Update user interests and mark onboarding as complete
+      // Update user interests
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          interests: selectedInterests,
-          onboarding_completed: true,
-          onboarding_completed_at: new Date().toISOString()
+          interests: selectedInterests
         })
         .eq('id', user?.id);
 
@@ -267,15 +365,44 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
       // Mark step complete
       await markStepComplete('interests');
 
-      toast.success('Onboarding complete! 🎉');
+      toast.success('Interests saved!');
+
+      // Fetch suggested users for next step
+      await fetchSuggestedUsers();
+
+      setCurrentStep(5);
+    } catch (err: any) {
+      console.error('Error saving interests:', err);
+      toast.error('Failed to save interests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveStep5 = async () => {
+    try {
+      setLoading(true);
+
+      // Mark onboarding as complete
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          onboarding_completed: true,
+          onboarding_completed_at: new Date().toISOString()
+        })
+        .eq('id', user?.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('Welcome to LavLay! 🎉');
 
       // Call completion callback
       if (onComplete) {
         onComplete();
       }
     } catch (err: any) {
-      console.error('Error saving interests:', err);
-      toast.error('Failed to save interests');
+      console.error('Error completing onboarding:', err);
+      toast.error('Failed to complete onboarding');
     } finally {
       setLoading(false);
     }
@@ -295,6 +422,9 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
       case 4:
         handleSaveStep4();
         break;
+      case 5:
+        handleSaveStep5();
+        break;
     }
   };
 
@@ -308,6 +438,9 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
     if (currentStep === 2) {
       // Skip background image - just go to next step
       setCurrentStep(3);
+    } else if (currentStep === 5) {
+      // Skip friend suggestions - complete onboarding
+      handleSaveStep5();
     } else if (onSkip) {
       // Skip all - mark onboarding as complete
       try {
@@ -547,6 +680,87 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
             </div>
           )}
 
+          {/* Step 5: Follow Suggestions */}
+          {currentStep === 5 && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
+                  <Users className="w-8 h-8 text-purple-600" />
+                </div>
+                <h3 className="text-xl mb-2">Find People to Follow</h3>
+                <p className="text-gray-600">
+                  Follow some accounts to build your feed
+                </p>
+              </div>
+
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {loadingUsers ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                  </div>
+                ) : suggestedUsers.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">
+                    No suggestions available yet. You can skip this step.
+                  </p>
+                ) : (
+                  suggestedUsers.map((userItem) => {
+                    const isFollowing = followingIds.has(userItem.id);
+                    const isLoading = followingInProgress.has(userItem.id);
+
+                    return (
+                      <div
+                        key={userItem.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-12 h-12">
+                            <AvatarImage src={getAvatarUrl(userItem)} />
+                            <AvatarFallback>
+                              {(userItem.full_name || userItem.username || 'U')[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">
+                              {userItem.full_name || userItem.username}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              @{userItem.username} · {userItem.followers_count || 0} followers
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={isFollowing ? "default" : "outline"}
+                          className={`gap-1 ${isFollowing ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
+                          onClick={() => handleFollow(userItem.id)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : isFollowing ? (
+                            <>
+                              <UserCheck className="w-4 h-4" />
+                              Following
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4" />
+                              Follow
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-sm text-gray-600 text-center">
+                Following {followingIds.size} {followingIds.size === 1 ? 'person' : 'people'}
+              </p>
+            </div>
+          )}
+
           {/* Navigation */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t">
             <Button
@@ -559,7 +773,7 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
             </Button>
 
             <div className="flex gap-2">
-              {(currentStep === 2 || onSkip) && (
+              {(currentStep === 2 || currentStep === 5 || onSkip) && (
                 <Button variant="ghost" onClick={handleSkip} disabled={loading}>
                   Skip
                 </Button>

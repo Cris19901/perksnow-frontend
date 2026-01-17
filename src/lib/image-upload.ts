@@ -10,7 +10,7 @@ import { r2Client, r2Config, isR2Configured } from './r2-client';
  */
 export async function uploadImage(
   file: File,
-  bucket: 'avatars' | 'posts' | 'products' | 'videos',
+  bucket: 'avatars' | 'posts' | 'products' | 'videos' | 'covers' | 'backgrounds',
   userId: string
 ): Promise<string> {
   // Check if R2 is configured
@@ -45,7 +45,7 @@ export async function uploadImage(
  */
 async function uploadToR2(
   file: File,
-  bucket: 'avatars' | 'posts' | 'products' | 'videos',
+  bucket: 'avatars' | 'posts' | 'products' | 'videos' | 'covers' | 'backgrounds',
   userId: string
 ): Promise<string> {
   // Generate unique filename

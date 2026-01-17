@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { uploadImage } from '@/lib/image-upload';
+import { uploadImage } from '@/lib/image-upload-new';
 import { toast } from 'sonner';
 
 interface ReelUploadProps {

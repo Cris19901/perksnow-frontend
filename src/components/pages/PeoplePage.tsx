@@ -312,7 +312,7 @@ export function PeoplePage({ onCartClick, cartItemsCount }: PeoplePageProps) {
         currentPage="people"
       />
 
-      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
+      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-6 pb-28 md:pb-6">
         {/* Search Bar */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
           <div className="relative">

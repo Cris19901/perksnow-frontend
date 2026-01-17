@@ -1,11 +1,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Image, Video, X, Loader2 } from 'lucide-react';
+import { Image, Video, X, Loader2, MapPin, Smile } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from './ui/popover';
 
 interface CreatePostProps {
   onPostCreated?: () => void;
@@ -18,6 +24,22 @@ interface UploadedImage {
   url?: string;
 }
 
+// Predefined feelings/activities
+const FEELINGS = [
+  { emoji: '😊', label: 'happy' },
+  { emoji: '😢', label: 'sad' },
+  { emoji: '😍', label: 'loved' },
+  { emoji: '🎉', label: 'excited' },
+  { emoji: '😴', label: 'tired' },
+  { emoji: '🤔', label: 'thoughtful' },
+  { emoji: '😎', label: 'cool' },
+  { emoji: '🙏', label: 'grateful' },
+  { emoji: '💪', label: 'motivated' },
+  { emoji: '😋', label: 'hungry' },
+  { emoji: '🥳', label: 'celebrating' },
+  { emoji: '😌', label: 'relaxed' },
+];
+
 export function CreatePost({ onPostCreated }: CreatePostProps) {
   const { user } = useAuth();
   const [postText, setPostText] = useState('');
@@ -25,7 +47,12 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
   const [uploading, setUploading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [location, setLocation] = useState('');
+  const [feeling, setFeeling] = useState<{ emoji: string; label: string } | null>(null);
+  const [showLocationInput, setShowLocationInput] = useState(false);
+  const [showFeelingPicker, setShowFeelingPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -138,10 +165,19 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
       toast.dismiss();
 
+      // Build the content with location and feeling
+      let finalContent = postText.trim();
+      if (feeling) {
+        finalContent = `${feeling.emoji} Feeling ${feeling.label}\n\n${finalContent}`;
+      }
+      if (location) {
+        finalContent = `📍 ${location}\n${finalContent}`;
+      }
+
       // Create the post
       const postData = {
         user_id: user.id,
-        content: postText.trim(),
+        content: finalContent,
         image_url: imageUrls[0] || null, // Keep first image for backwards compatibility
         images_count: imageUrls.length,
       };
@@ -186,6 +222,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       setPostText('');
       setUploadedImages([]);
       setError(null);
+      setLocation('');
+      setFeeling(null);
+      setShowLocationInput(false);
 
       toast.success('Post created successfully!');
 
@@ -279,8 +318,69 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         className="hidden"
       />
 
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            toast.info('Video uploads will be available soon! For now, please upload videos as Reels.');
+          }
+          if (videoInputRef.current) {
+            videoInputRef.current.value = '';
+          }
+        }}
+        className="hidden"
+      />
+
+      {/* Location Input */}
+      {showLocationInput && (
+        <div className="px-3 sm:px-4 pb-2">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <Input
+              placeholder="Add location..."
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="h-8 text-sm"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => {
+                setLocation('');
+                setShowLocationInput(false);
+              }}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Feeling Display */}
+      {feeling && (
+        <div className="px-3 sm:px-4 pb-2">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>{feeling.emoji}</span>
+            <span>Feeling {feeling.label}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setFeeling(null)}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
         <div className="flex gap-1 sm:gap-2 flex-wrap">
+          {/* Photo Button */}
           <Button
             variant="ghost"
             size="sm"
@@ -293,10 +393,73 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
             ) : (
               <Image className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             )}
-            <span className="hidden sm:inline text-xs sm:text-sm">
-              {uploadedImages.length > 0 ? `Add More (${uploadedImages.length}/10)` : 'Photos'}
+            <span className="text-xs sm:text-sm">
+              {uploadedImages.length > 0 ? `${uploadedImages.length}/10` : 'Photo'}
             </span>
           </Button>
+
+          {/* Video Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+            onClick={() => videoInputRef.current?.click()}
+            disabled={uploading || posting}
+          >
+            <Video className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+            <span className="text-xs sm:text-sm">Video</span>
+          </Button>
+
+          {/* Location Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3 ${location ? 'text-red-500' : ''}`}
+            onClick={() => setShowLocationInput(!showLocationInput)}
+            disabled={posting}
+          >
+            <MapPin className={`w-4 h-4 sm:w-5 sm:h-5 ${location ? 'text-red-500' : 'text-red-500'}`} />
+            <span className="text-xs sm:text-sm hidden xs:inline">Location</span>
+          </Button>
+
+          {/* Feeling Button */}
+          <Popover open={showFeelingPicker} onOpenChange={setShowFeelingPicker}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3 ${feeling ? 'text-yellow-600' : ''}`}
+                disabled={posting}
+              >
+                {feeling ? (
+                  <span className="text-base">{feeling.emoji}</span>
+                ) : (
+                  <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
+                )}
+                <span className="text-xs sm:text-sm hidden xs:inline">Feeling</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <p className="text-sm font-medium mb-2">How are you feeling?</p>
+              <div className="grid grid-cols-4 gap-2">
+                {FEELINGS.map((f) => (
+                  <button
+                    key={f.label}
+                    onClick={() => {
+                      setFeeling(f);
+                      setShowFeelingPicker(false);
+                    }}
+                    className={`flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      feeling?.label === f.label ? 'bg-gray-100' : ''
+                    }`}
+                  >
+                    <span className="text-xl">{f.emoji}</span>
+                    <span className="text-xs text-gray-600 mt-1 capitalize">{f.label}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         <Button
           className="bg-gradient-to-r from-purple-600 to-pink-600 h-8 sm:h-9 px-4 sm:px-6 text-sm sm:text-base"

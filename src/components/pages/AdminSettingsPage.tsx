@@ -159,7 +159,7 @@ export function AdminSettingsPage({ onNavigate, onCartClick, cartItemsCount }: A
         currentPage="admin"
       />
 
-      <div className="max-w-5xl mx-auto px-4 py-6 pb-20 md:pb-6">
+      <div className="max-w-5xl mx-auto px-4 py-6 pb-28 md:pb-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>

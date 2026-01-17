@@ -12,7 +12,7 @@ import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Came
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/image-upload';
+import { uploadImage } from '@/lib/image-upload-new';
 import { toast } from 'sonner';
 
 interface ProfilePageProps {
@@ -379,7 +379,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         currentPage="profile"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-24 md:pb-6">
         {/* Cover Photo */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
           <div className="h-48 sm:h-64 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 relative group">

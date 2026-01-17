@@ -276,7 +276,7 @@ export function CreateProductPage({ onNavigate, onCartClick, cartItemsCount }: C
         cartItemsCount={cartItemsCount}
       />
 
-      <div className="max-w-[900px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
+      <div className="max-w-[900px] mx-auto px-4 py-4 sm:py-6 pb-28 md:pb-6">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl mb-2">List a Product</h1>
           <p className="text-gray-600">Create a new product listing to sell on the marketplace</p>

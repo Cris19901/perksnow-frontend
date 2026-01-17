@@ -180,7 +180,7 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
         currentPage="points"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-20 md:pb-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-28 md:pb-6">
         {/* Points Balance Card */}
         <Card className="bg-gradient-to-br from-purple-600 via-pink-600 to-blue-600 text-white p-6 sm:p-8 mb-6">
           <div className="flex items-center justify-between mb-4">

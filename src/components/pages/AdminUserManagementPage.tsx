@@ -224,7 +224,7 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
         currentPage="admin"
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-6">
         {/* Header */}
         <div className="mb-6">
           <Button
