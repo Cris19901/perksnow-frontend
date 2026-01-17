@@ -1,0 +1,150 @@
+-- Verify Referral/Affiliate System Status (FIXED)
+-- Run this in Supabase SQL Editor to check if the system is working
+
+-- 1. Check if referral tables exist
+SELECT
+    table_name,
+    CASE
+        WHEN table_name IN (
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = 'public'
+        ) THEN '✅ Exists'
+        ELSE '❌ Missing'
+    END as status
+FROM (
+    VALUES
+        ('referrals'),
+        ('deposits'),
+        ('referral_earnings'),
+        ('referral_settings')
+) AS t(table_name);
+
+-- 2. Check if triggers exist
+SELECT
+    trigger_name,
+    event_object_table,
+    action_statement,
+    '✅ Active' as status
+FROM information_schema.triggers
+WHERE trigger_name IN (
+    'generate_referral_code_trigger',
+    'process_deposit_rewards_trigger'
+)
+ORDER BY trigger_name;
+
+-- 3. Check what columns exist in referral_settings
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'referral_settings'
+ORDER BY ordinal_position;
+
+-- 4. Check referral settings (rewards configuration) - flexible query
+SELECT *
+FROM referral_settings
+LIMIT 1;
+
+-- 5. Check if any referral codes have been generated
+SELECT
+    COUNT(*) as total_users,
+    COUNT(CASE WHEN referral_code IS NOT NULL THEN 1 END) as users_with_codes
+FROM users;
+
+-- 6. Check if any referrals have been tracked
+SELECT
+    COUNT(*) as total_referrals,
+    COUNT(CASE WHEN is_complete = true THEN 1 END) as completed_referrals,
+    COALESCE(SUM(points_awarded), 0) as total_points_awarded
+FROM referrals;
+
+-- 7. Check if deposits table exists and has data
+SELECT
+    COUNT(*) as total_deposits,
+    COALESCE(SUM(amount), 0) as total_amount,
+    COUNT(DISTINCT user_id) as unique_depositors
+FROM deposits;
+
+-- 8. Check if any referral earnings have been recorded
+SELECT
+    COUNT(*) as total_earnings,
+    COALESCE(SUM(amount), 0) as total_earnings_amount,
+    COALESCE(SUM(points_awarded), 0) as total_points_from_earnings
+FROM referral_earnings;
+
+-- 9. Sample data - Recent referrals (if any)
+SELECT
+    r.id,
+    u1.username as referrer,
+    u2.username as referred_user,
+    r.points_awarded,
+    r.is_complete,
+    r.created_at
+FROM referrals r
+LEFT JOIN users u1 ON u1.id = r.referrer_id
+LEFT JOIN users u2 ON u2.id = r.referred_user_id
+ORDER BY r.created_at DESC
+LIMIT 5;
+
+-- 10. Check if referral code generation function exists
+SELECT
+    routine_name,
+    '✅ Function exists' as status
+FROM information_schema.routines
+WHERE routine_name IN (
+    'generate_referral_code',
+    'process_deposit_rewards'
+)
+AND routine_schema = 'public';
+
+-- Summary
+DO $$
+DECLARE
+    table_count int;
+    trigger_count int;
+    function_count int;
+    settings_count int;
+BEGIN
+    -- Count tables
+    SELECT COUNT(*) INTO table_count
+    FROM pg_tables
+    WHERE schemaname = 'public'
+    AND tablename IN ('referrals', 'deposits', 'referral_earnings', 'referral_settings');
+
+    -- Count triggers
+    SELECT COUNT(*) INTO trigger_count
+    FROM information_schema.triggers
+    WHERE trigger_name IN ('generate_referral_code_trigger', 'process_deposit_rewards_trigger');
+
+    -- Count functions
+    SELECT COUNT(*) INTO function_count
+    FROM information_schema.routines
+    WHERE routine_name IN ('generate_referral_code', 'process_deposit_rewards')
+    AND routine_schema = 'public';
+
+    -- Count settings
+    SELECT COUNT(*) INTO settings_count
+    FROM referral_settings;
+
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '📊 REFERRAL SYSTEM STATUS SUMMARY';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Tables: % / 4', table_count;
+    RAISE NOTICE 'Triggers: % / 2', trigger_count;
+    RAISE NOTICE 'Functions: % / 2', function_count;
+    RAISE NOTICE 'Settings rows: %', settings_count;
+    RAISE NOTICE '';
+
+    IF table_count = 4 AND trigger_count >= 1 AND function_count >= 1 THEN
+        RAISE NOTICE '✅ Referral system is INSTALLED';
+        RAISE NOTICE '✅ Core components are active';
+    ELSIF table_count > 0 THEN
+        RAISE NOTICE '⚠️  Referral system is PARTIALLY INSTALLED';
+        RAISE NOTICE '⚠️  Some components may be missing';
+        RAISE NOTICE '';
+        RAISE NOTICE '💡 You may need to run CREATE_REFERRAL_SYSTEM.sql';
+    ELSE
+        RAISE NOTICE '❌ Referral system NOT INSTALLED';
+        RAISE NOTICE '💡 Run CREATE_REFERRAL_SYSTEM.sql to install';
+    END IF;
+    RAISE NOTICE '========================================';
+END $$;

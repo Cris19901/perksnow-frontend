@@ -1,0 +1,27 @@
+# Dependencies (Vercel will install them)
+node_modules
+
+# Build output (Vercel will build)
+build
+dist
+
+# Documentation and guides
+*.md
+!README.md
+
+# Migration SQL files (not needed in deployment)
+*.sql
+
+# Logs
+*.log
+
+# Editor
+.vscode
+.idea
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large files not needed for deployment
+.git
