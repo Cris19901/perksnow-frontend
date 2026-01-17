@@ -53,58 +53,96 @@ export async function uploadImage(
     throw new Error('Supabase URL not configured');
   }
 
-  try {
-    // Step 1: Get pre-signed URL from Edge Function
-    console.log('Requesting pre-signed URL...');
-    const urlResponse = await fetch(`${supabaseUrl}/functions/v1/generate-upload-url`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        bucket,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-      }),
-    });
+  // Retry logic for more reliable uploads
+  let lastError: Error | null = null;
+  const maxRetries = 2;
 
-    if (!urlResponse.ok) {
-      const errorText = await urlResponse.text();
-      console.error('Failed to get pre-signed URL:', errorText);
-      throw new Error(`Failed to generate upload URL: ${urlResponse.status}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`Retry attempt ${attempt}/${maxRetries}...`);
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+
+      // Step 1: Get pre-signed URL from Edge Function
+      console.log('Requesting pre-signed URL...');
+      const urlResponse = await fetch(`${supabaseUrl}/functions/v1/generate-upload-url`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bucket,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        const errorText = await urlResponse.text();
+        console.error('Failed to get pre-signed URL:', errorText);
+        throw new Error(`Failed to generate upload URL: ${urlResponse.status}`);
+      }
+
+      const { uploadUrl, publicUrl, fileKey } = await urlResponse.json();
+      console.log('Pre-signed URL received, uploading to R2...');
+
+      // Step 2: Upload directly to R2 using pre-signed URL
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('R2 upload failed:', errorText);
+
+        // Check for specific error types
+        if (errorText.includes('SignatureDoesNotMatch')) {
+          throw new Error('Upload signature error. Retrying...');
+        } else if (errorText.includes('403')) {
+          throw new Error('Upload permission denied. Please try again.');
+        } else {
+          throw new Error(`Upload failed: ${uploadResponse.status}`);
+        }
+      }
+
+      console.log('✅ Upload successful:', publicUrl);
+      return publicUrl;
+
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Upload attempt ${attempt + 1} failed:`, error);
+
+      // Don't retry on certain errors
+      if (error.message.includes('Authentication') ||
+          error.message.includes('Not authenticated') ||
+          error.message.includes('Invalid file') ||
+          error.message.includes('too large')) {
+        throw error;
+      }
+
+      // If this wasn't the last attempt, continue to retry
+      if (attempt < maxRetries) {
+        continue;
+      }
     }
-
-    const { uploadUrl, publicUrl, fileKey } = await urlResponse.json();
-    console.log('Pre-signed URL received, uploading to R2...');
-
-    // Step 2: Upload directly to R2 using pre-signed URL
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': file.type,
-      },
-      body: file,
-    });
-
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('R2 upload failed:', errorText);
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
-    }
-
-    console.log('✅ Upload successful:', publicUrl);
-    return publicUrl;
-  } catch (error: any) {
-    console.error('Upload error:', error);
-
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error('Network error. Please check your internet connection and try again.');
-    }
-
-    throw error;
   }
+
+  // All retries failed
+  console.error('All upload attempts failed:', lastError);
+
+  if (lastError?.message.includes('Failed to fetch') || lastError?.message.includes('Network')) {
+    throw new Error('Network error. Please check your internet connection and try again.');
+  }
+
+  throw new Error(lastError?.message || 'Upload failed after multiple attempts. Please try again.');
 }
 
 /**

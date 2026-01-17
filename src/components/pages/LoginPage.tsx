@@ -32,17 +32,30 @@ export function LoginPage() {
 
     setResetLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      console.log('Sending password reset email to:', resetEmail);
+      const { data, error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/login`,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Password reset error:', error);
+        throw error;
+      }
 
+      console.log('Password reset response:', data);
       setResetSuccess(true);
-      toast.success('Password reset email sent! Check your inbox.');
+      setShowForgotPassword(false);
+      toast.success('Password reset email sent! Check your inbox (including spam folder).');
     } catch (err: any) {
       console.error('Password reset error:', err);
-      toast.error(err.message || 'Failed to send reset email');
+      // Be more specific about the error
+      if (err.message.includes('rate')) {
+        toast.error('Too many requests. Please wait a few minutes and try again.');
+      } else if (err.message.includes('email')) {
+        toast.error('Please check your email address and try again.');
+      } else {
+        toast.error(err.message || 'Failed to send reset email. Please contact support.');
+      }
     } finally {
       setResetLoading(false);
     }
