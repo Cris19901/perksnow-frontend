@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (data: SignInData) => Promise<void>;
-  signUp: (data: SignUpData) => Promise<void>;
+  signUp: (data: SignUpData) => Promise<any>;
   signOut: () => Promise<void>;
 }
 
@@ -84,8 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSignUp = async (data: SignUpData) => {
-    const { user: signedUpUser } = await signUp(data);
-    setUser(signedUpUser);
+    const result = await signUp(data);
+    setUser(result.user);
+    return result;
   };
 
   const handleSignOut = async () => {

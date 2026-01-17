@@ -32,9 +32,21 @@ export async function uploadImage(
 
   // Get current session
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session) {
+  if (sessionError) {
+    console.error('Session error:', sessionError);
+    throw new Error('Authentication error. Please try logging in again.');
+  }
+  if (!session) {
+    console.error('No session found');
     throw new Error('Not authenticated. Please log in to upload files.');
   }
+
+  console.log('Uploading to Edge Function:', {
+    bucket,
+    fileType: file.type,
+    fileSize: file.size,
+    userId: session.user.id
+  });
 
   // Prepare form data
   const formData = new FormData();
@@ -48,21 +60,41 @@ export async function uploadImage(
   }
 
   // Upload via Edge Function
-  const response = await fetch(`${supabaseUrl}/functions/v1/upload-media`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-    body: formData,
-  });
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/upload-media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-    throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+    console.log('Upload response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Upload error response:', errorText);
+
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText || 'Upload failed' };
+      }
+
+      throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Upload successful:', result.url);
+    return result.url;
+  } catch (error: any) {
+    console.error('Upload fetch error:', error);
+    if (error.message.includes('Failed to fetch')) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    throw error;
   }
-
-  const { url } = await response.json();
-  return url;
 }
 
 /**
