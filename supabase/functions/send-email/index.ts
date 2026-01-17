@@ -10,7 +10,7 @@ const FROM_EMAIL = 'noreply@lavlay.com';
 const FROM_NAME = 'LavLay';
 
 interface EmailPayload {
-  type: 'referral_signup' | 'referral_deposit' | 'withdrawal_request' | 'withdrawal_completed' | 'withdrawal_rejected' | 'withdrawal_status' | 'welcome';
+  type: 'referral_signup' | 'referral_deposit' | 'withdrawal_request' | 'withdrawal_completed' | 'withdrawal_rejected' | 'withdrawal_status' | 'welcome' | 'follow_notification';
   // Legacy format (nested data)
   data?: {
     to_email: string;
@@ -25,6 +25,9 @@ interface EmailPayload {
     account_number?: string;
     admin_notes?: string;
     referral_code?: string;
+    follower_name?: string;
+    follower_username?: string;
+    follower_avatar?: string;
   };
   // New flat format from database triggers
   email?: string;
@@ -386,6 +389,62 @@ function getEmailTemplate(type: string, data: any): { subject: string; htmlBody:
                 <p style="text-align: center; font-size: 14px; color: #6b7280;">
                   Your 15,000 bonus points are already in your account!
                 </p>
+              </div>
+              <div class="footer">
+                <p>LavLay - Social Media Monetization Platform</p>
+                <p><a href="https://lavlay.com">lavlay.com</a></p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+      };
+
+    case 'follow_notification':
+      return {
+        subject: `${data.follower_name} started following you on LavLay`,
+        htmlBody: `
+          <!DOCTYPE html>
+          <html>
+          <head>${styles}</head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎉 New Follower!</h1>
+              </div>
+              <div class="content">
+                <p>Hi ${data.to_name},</p>
+
+                <div style="background: #f9fafb; border-radius: 12px; padding: 24px; margin: 20px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="100" style="padding-right: 20px; vertical-align: top;">
+                        <img src="${data.follower_avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(data.follower_name)}"
+                             alt="${data.follower_name}"
+                             style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #9333ea; display: block;">
+                      </td>
+                      <td style="vertical-align: middle;">
+                        <h2 style="margin: 0 0 8px; color: #1f2937; font-size: 20px; font-weight: 600;">
+                          ${data.follower_name}
+                        </h2>
+                        <p style="margin: 0; color: #6b7280; font-size: 15px;">
+                          @${data.follower_username}
+                        </p>
+                        <p style="margin: 12px 0 0; color: #374151; font-size: 15px;">
+                          started following you!
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+
+                <p style="text-align: center;">
+                  <a href="https://lavlay.com/@${data.follower_username}" class="button">View Profile</a>
+                </p>
+
+                <div class="info-box" style="background: #fef3c7; border-left-color: #f59e0b;">
+                  <strong>💡 Tip:</strong> Follow them back to build your community and earn engagement points!
+                </div>
               </div>
               <div class="footer">
                 <p>LavLay - Social Media Monetization Platform</p>
