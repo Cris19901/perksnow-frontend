@@ -39,7 +39,7 @@ async function generatePresignedUrl(
 
   // Canonical request components
   const method = 'PUT';
-  const canonicalUri = `/${key}`;
+  const canonicalUri = `/${bucket}/${key}`;
   const canonicalQueryString = new URLSearchParams({
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${R2_ACCESS_KEY_ID}/${credentialScope}`,
@@ -48,7 +48,7 @@ async function generatePresignedUrl(
     'X-Amz-SignedHeaders': 'host',
   }).toString();
 
-  const host = `${bucket}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   const canonicalHeaders = `host:${host}\n`;
   const signedHeaders = 'host';
 
@@ -111,7 +111,7 @@ async function generatePresignedUrl(
     .join('');
 
   // Construct final URL
-  const finalUrl = `${endpoint}/${key}?${canonicalQueryString}&X-Amz-Signature=${signatureHex}`;
+  const finalUrl = `${endpoint}/${bucket}/${key}?${canonicalQueryString}&X-Amz-Signature=${signatureHex}`;
 
   return finalUrl;
 }
