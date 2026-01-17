@@ -1,7 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { S3Client, PutObjectCommand } from 'https://esm.sh/@aws-sdk/client-s3@3';
-import { getSignedUrl } from 'https://esm.sh/@aws-sdk/s3-request-presigner@3';
 
 // CORS headers
 const corsHeaders = {
@@ -17,20 +15,105 @@ const R2_SECRET_ACCESS_KEY = Deno.env.get('R2_SECRET_ACCESS_KEY');
 const R2_BUCKET = Deno.env.get('R2_BUCKET_NAME') || 'perksnow-media-dev';
 const R2_PUBLIC_URL = Deno.env.get('R2_PUBLIC_URL') || '';
 
-// Create R2 client
-function createR2Client() {
+// Generate AWS Signature V4 for pre-signed URL
+async function generatePresignedUrl(
+  bucket: string,
+  key: string,
+  contentType: string,
+  expiresIn: number = 300
+): Promise<string> {
   if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
     throw new Error('R2 credentials not configured');
   }
 
-  return new S3Client({
-    region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: R2_ACCESS_KEY_ID,
-      secretAccessKey: R2_SECRET_ACCESS_KEY,
-    },
-  });
+  const endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const region = 'auto';
+
+  // Current timestamp
+  const now = new Date();
+  const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+
+  // Credential scope
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+
+  // Canonical request components
+  const method = 'PUT';
+  const canonicalUri = `/${key}`;
+  const canonicalQueryString = new URLSearchParams({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${R2_ACCESS_KEY_ID}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': expiresIn.toString(),
+    'X-Amz-SignedHeaders': 'host',
+  }).toString();
+
+  const host = `${bucket}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const canonicalHeaders = `host:${host}\n`;
+  const signedHeaders = 'host';
+
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD'
+  ].join('\n');
+
+  // String to sign
+  const encoder = new TextEncoder();
+  const canonicalRequestHash = await crypto.subtle.digest(
+    'SHA-256',
+    encoder.encode(canonicalRequest)
+  );
+  const canonicalRequestHashHex = Array.from(new Uint8Array(canonicalRequestHash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    canonicalRequestHashHex
+  ].join('\n');
+
+  // Calculate signature
+  const getSignatureKey = async (key: string, dateStamp: string, regionName: string, serviceName: string) => {
+    const kDate = await hmac(`AWS4${key}`, dateStamp);
+    const kRegion = await hmac(kDate, regionName);
+    const kService = await hmac(kRegion, serviceName);
+    const kSigning = await hmac(kService, 'aws4_request');
+    return kSigning;
+  };
+
+  const hmac = async (key: string | ArrayBuffer, data: string): Promise<ArrayBuffer> => {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      typeof key === 'string' ? encoder.encode(key) : key,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    return await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
+  };
+
+  const signingKey = await getSignatureKey(
+    R2_SECRET_ACCESS_KEY,
+    dateStamp,
+    region,
+    's3'
+  );
+
+  const signature = await hmac(signingKey, stringToSign);
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // Construct final URL
+  const finalUrl = `${endpoint}/${key}?${canonicalQueryString}&X-Amz-Signature=${signatureHex}`;
+
+  return finalUrl;
 }
 
 serve(async (req) => {
@@ -110,22 +193,8 @@ serve(async (req) => {
 
     console.log(`Generating pre-signed URL for: ${fileKey}`);
 
-    // Create R2 client
-    const r2Client = createR2Client();
-
     // Generate pre-signed URL (valid for 5 minutes)
-    const command = new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: fileKey,
-      ContentType: fileType,
-      CacheControl: 'public, max-age=31536000',
-      Metadata: {
-        'uploaded-by': user.id,
-        'uploaded-at': new Date().toISOString(),
-      },
-    });
-
-    const uploadUrl = await getSignedUrl(r2Client, command, { expiresIn: 300 }); // 5 minutes
+    const uploadUrl = await generatePresignedUrl(R2_BUCKET, fileKey, fileType, 300);
 
     // Generate public URL
     const publicUrl = R2_PUBLIC_URL
