@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { X, Upload, Image as ImageIcon, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/image-upload-new';
+import { uploadImage } from '@/lib/image-upload-hybrid';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
