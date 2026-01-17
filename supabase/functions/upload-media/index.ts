@@ -9,19 +9,37 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Initialize R2 client
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${Deno.env.get('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: Deno.env.get('R2_ACCESS_KEY_ID')!,
-    secretAccessKey: Deno.env.get('R2_SECRET_ACCESS_KEY')!,
-  },
-});
-
-const R2_BUCKET = Deno.env.get('R2_BUCKET_NAME') || 'lavlay-media';
+// Get R2 config from environment
+const R2_ACCOUNT_ID = Deno.env.get('R2_ACCOUNT_ID');
+const R2_ACCESS_KEY_ID = Deno.env.get('R2_ACCESS_KEY_ID');
+const R2_SECRET_ACCESS_KEY = Deno.env.get('R2_SECRET_ACCESS_KEY');
+const R2_BUCKET = Deno.env.get('R2_BUCKET_NAME') || 'perksnow-media-dev';
 const R2_PUBLIC_URL = Deno.env.get('R2_PUBLIC_URL') || '';
-const R2_ACCOUNT_ID = Deno.env.get('R2_ACCOUNT_ID') || '';
+
+// Function to create R2 client on demand
+function createR2Client() {
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+    throw new Error('R2 credentials not configured');
+  }
+
+  console.log('Creating R2 client for account:', R2_ACCOUNT_ID);
+  console.log('R2 endpoint:', `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
+  console.log('R2 bucket:', R2_BUCKET);
+
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY,
+    },
+    // Add timeout configuration
+    requestHandler: {
+      connectionTimeout: 30000, // 30 seconds
+      socketTimeout: 30000, // 30 seconds
+    },
+  });
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -109,21 +127,34 @@ serve(async (req) => {
 
     console.log(`Uploading file: ${fileName}, Size: ${file.size} bytes, Type: ${file.type}`);
 
-    // Upload to R2
-    const arrayBuffer = await file.arrayBuffer();
-    const uploadCommand = new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: fileName,
-      Body: new Uint8Array(arrayBuffer),
-      ContentType: file.type,
-      CacheControl: 'public, max-age=31536000', // Cache for 1 year
-      Metadata: {
-        'uploaded-by': user.id,
-        'uploaded-at': new Date().toISOString(),
-      },
-    });
+    // Create R2 client for this request
+    const r2Client = createR2Client();
 
-    await r2Client.send(uploadCommand);
+    // Upload to R2 with error handling
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      console.log(`File converted to array buffer: ${arrayBuffer.byteLength} bytes`);
+
+      const uploadCommand = new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: fileName,
+        Body: new Uint8Array(arrayBuffer),
+        ContentType: file.type,
+        CacheControl: 'public, max-age=31536000', // Cache for 1 year
+        Metadata: {
+          'uploaded-by': user.id,
+          'uploaded-at': new Date().toISOString(),
+        },
+      });
+
+      console.log('Sending upload command to R2...');
+      const uploadResult = await r2Client.send(uploadCommand);
+      console.log('R2 upload result:', uploadResult);
+    } catch (r2Error) {
+      console.error('R2 upload error:', r2Error);
+      console.error('R2 error details:', JSON.stringify(r2Error, null, 2));
+      throw new Error(`R2 upload failed: ${r2Error.message || r2Error.toString()}`);
+    }
 
     // Generate public URL
     const publicUrl = R2_PUBLIC_URL
