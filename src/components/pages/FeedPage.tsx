@@ -305,7 +305,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     setShowReelsViewer(true);
   };
 
-  // Mix posts, products, and reels for a varied feed
+  // Mix posts, products, and reels for a varied feed with shuffling
   const createMixedFeed = () => {
     const feed: Array<{ type: 'post' | 'product' | 'reel'; data: any }> = [];
 
@@ -318,12 +318,21 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     // Add all reels
     reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
 
-    // Sort by created_at if available, otherwise maintain order
-    return feed.sort((a, b) => {
+    // Sort by created_at first
+    const sortedFeed = feed.sort((a, b) => {
       const dateA = a.data.created_at ? new Date(a.data.created_at).getTime() : 0;
       const dateB = b.data.created_at ? new Date(b.data.created_at).getTime() : 0;
       return dateB - dateA; // Most recent first
     });
+
+    // Shuffle algorithm (Fisher-Yates) - randomizes feed on each render/refresh
+    const shuffledFeed = [...sortedFeed];
+    for (let i = shuffledFeed.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledFeed[i], shuffledFeed[j]] = [shuffledFeed[j], shuffledFeed[i]];
+    }
+
+    return shuffledFeed;
   };
 
   const mixedFeed = createMixedFeed();

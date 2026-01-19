@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,12 @@ import { PostComments } from './PostComments';
 import { Sheet, SheetContent } from './ui/sheet';
 import { ImageGrid } from './ImageGrid';
 import { ImageLightbox } from './ImageLightbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface PostProps {
   id: number;
@@ -33,9 +39,10 @@ interface PostProps {
   comments: number;
   shares: number;
   timestamp: string;
+  onDelete?: () => void;
 }
 
-export function Post({ id, author, content, image, images, images_count, likes, comments, shares, timestamp }: PostProps) {
+export function Post({ id, author, content, image, images, images_count, likes, comments, shares, timestamp, onDelete }: PostProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
@@ -46,12 +53,30 @@ export function Post({ id, author, content, image, images, images_count, likes, 
   const [commentCount, setCommentCount] = useState(comments);
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [postAuthorId, setPostAuthorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       checkIfLiked();
+      fetchPostAuthor();
     }
   }, [user, id]);
+
+  const fetchPostAuthor = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      setPostAuthorId(data.user_id);
+    } catch (err) {
+      console.error('Error fetching post author:', err);
+    }
+  };
 
   const checkIfLiked = async () => {
     if (!user) {
@@ -154,6 +179,48 @@ export function Post({ id, author, content, image, images, images_count, likes, 
     setShowLightbox(true);
   };
 
+  const handleDelete = async () => {
+    if (!user || !postAuthorId) {
+      toast.error('Unable to delete post');
+      return;
+    }
+
+    // Check if user owns this post
+    if (user.id !== postAuthorId) {
+      toast.error('You can only delete your own posts');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      // Delete the post (cascade will delete likes, comments, and images)
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id); // Extra security check
+
+      if (error) throw error;
+
+      toast.success('Post deleted successfully');
+
+      // Call parent onDelete callback to remove from feed
+      if (onDelete) {
+        onDelete();
+      }
+    } catch (err: any) {
+      console.error('Error deleting post:', err);
+      toast.error(err.message || 'Failed to delete post');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Determine which images to display
   const displayImages = images && images.length > 0 ? images : (image ? [{ url: image }] : []);
 
@@ -179,9 +246,30 @@ export function Post({ id, author, content, image, images, images_count, likes, 
             <p className="text-xs sm:text-sm text-gray-500">{timestamp}</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
-          <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
-        </Button>
+        {/* Show dropdown menu only if user owns the post */}
+        {user && postAuthorId === user.id ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
+                <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {isDeleting ? 'Deleting...' : 'Delete Post'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
+            <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+          </Button>
+        )}
       </div>
 
       {/* Post Content */}

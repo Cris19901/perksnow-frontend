@@ -1,9 +1,10 @@
 import { Button } from '../ui/button';
 import { Users, Target, Award, Heart, Zap, Globe } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useNavigate } from 'react-router-dom';
 
 interface AboutPageProps {
-  onNavigate: (page: string) => void;
+  onNavigate?: (page: string) => void;
 }
 
 const team = [
@@ -82,15 +83,25 @@ function Shield(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function AboutPage({ onNavigate }: AboutPageProps) {
+  const navigate = useNavigate();
+
+  const handleNavigate = (page: string) => {
+    if (onNavigate) {
+      onNavigate(page);
+    } else {
+      navigate(`/${page}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div 
-              className="flex items-center gap-2 cursor-pointer" 
-              onClick={() => onNavigate('landing')}
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => handleNavigate('landing')}
             >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">L</span>
@@ -98,12 +109,12 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
               <span className="text-xl font-semibold">LavLay</span>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => onNavigate('login')}>
+              <Button variant="ghost" onClick={() => handleNavigate('login')}>
                 Log In
               </Button>
-              <Button 
+              <Button
                 className="bg-gradient-to-r from-purple-600 to-pink-600"
-                onClick={() => onNavigate('signup')}
+                onClick={() => handleNavigate('signup')}
               >
                 Sign Up
               </Button>
@@ -245,10 +256,10 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
           <p className="text-xl text-gray-600 mb-8">
             Be part of a community that values authentic connections
           </p>
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="bg-gradient-to-r from-purple-600 to-pink-600"
-            onClick={() => onNavigate('signup')}
+            onClick={() => handleNavigate('signup')}
           >
             Get Started Today
           </Button>

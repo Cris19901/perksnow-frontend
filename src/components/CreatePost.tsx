@@ -325,7 +325,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) {
-            toast.info('Video uploads will be available soon! For now, please upload videos as Reels.');
+            // Redirect to reels upload
+            toast.info('Redirecting to Reels upload for video content...');
+            window.location.href = '/reels';
           }
           if (videoInputRef.current) {
             videoInputRef.current.value = '';

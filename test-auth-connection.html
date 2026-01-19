@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LavLay Auth Diagnostic</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      color: #1f2937;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .test-section {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      border: 2px solid #e5e7eb;
+    }
+
+    .test-section.running {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+
+    .test-section.success {
+      border-color: #10b981;
+      background: #d1fae5;
+    }
+
+    .test-section.error {
+      border-color: #ef4444;
+      background: #fee2e2;
+    }
+
+    .test-title {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .test-result {
+      font-size: 14px;
+      color: #374151;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      background: white;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 20px;
+      transition: transform 0.2s;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+    }
+
+    .button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .spinner {
+      border: 3px solid #f3f4f6;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .summary {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      border-radius: 6px;
+      margin-top: 20px;
+    }
+
+    .summary-title {
+      font-weight: 600;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+
+    .summary-text {
+      color: #92400e;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 LavLay Auth Diagnostic</h1>
+    <p class="subtitle">Testing your connection to Supabase authentication service</p>
+
+    <div id="test1" class="test-section">
+      <div class="test-title">
+        <span class="status-icon">⏳</span>
+        <span>1. Network Connection</span>
+      </div>
+      <div class="test-result" id="result1">Waiting to run...</div>
+    </div>
+
+    <div id="test2" class="test-section">
+      <div class="test-title">
+        <span class="status-icon">⏳</span>
+        <span>2. DNS Resolution</span>
+      </div>
+      <div class="test-result" id="result2">Waiting to run...</div>
+    </div>
+
+    <div id="test3" class="test-section">
+      <div class="test-title">
+        <span class="status-icon">⏳</span>
+        <span>3. Supabase Reachability</span>
+      </div>
+      <div class="test-result" id="result3">Waiting to run...</div>
+    </div>
+
+    <div id="test4" class="test-section">
+      <div class="test-title">
+        <span class="status-icon">⏳</span>
+        <span>4. Auth Health Check</span>
+      </div>
+      <div class="test-result" id="result4">Waiting to run...</div>
+    </div>
+
+    <div id="test5" class="test-section">
+      <div class="test-title">
+        <span class="status-icon">⏳</span>
+        <span>5. Auth API Test (No Login Required)</span>
+      </div>
+      <div class="test-result" id="result5">Waiting to run...</div>
+    </div>
+
+    <div id="summary" class="summary" style="display: none;">
+      <div class="summary-title">📋 Summary</div>
+      <div class="summary-text" id="summaryText"></div>
+    </div>
+
+    <button class="button" id="runButton" onclick="runDiagnostics()">
+      Run Diagnostics
+    </button>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://kswknblwjlkgxgvypkmo.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzd2tuYmx3amxrZ3hndnlwa21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MTg4MTAsImV4cCI6MjA3ODE5NDgxMH0.qK_7wzeOUwRhHTWWtNvpayh1hOfyfXZw5W4X0VbDwZY';
+
+    function setTestStatus(testId, status, icon) {
+      const testEl = document.getElementById(`test${testId}`);
+      testEl.className = `test-section ${status}`;
+      testEl.querySelector('.status-icon').innerHTML = icon;
+    }
+
+    function setTestResult(testId, text) {
+      document.getElementById(`result${testId}`).textContent = text;
+    }
+
+    async function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function runDiagnostics() {
+      const button = document.getElementById('runButton');
+      button.disabled = true;
+      button.textContent = 'Running diagnostics...';
+      document.getElementById('summary').style.display = 'none';
+
+      let issues = [];
+      let allPassed = true;
+
+      // Test 1: Network Connection
+      try {
+        setTestStatus(1, 'running', '<div class="spinner"></div>');
+
+        if (!navigator.onLine) {
+          throw new Error('Browser reports offline status');
+        }
+
+        const pingTest = await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
+
+        setTestStatus(1, 'success', '✅');
+        setTestResult(1, '✅ Internet connection is working\n✅ Browser is online\n✅ Can reach external servers');
+      } catch (error) {
+        allPassed = false;
+        setTestStatus(1, 'error', '❌');
+        setTestResult(1, `❌ Network connection issue:\n${error.message}\n\nPlease check your internet connection.`);
+        issues.push('No internet connection or network blocked');
+      }
+
+      await sleep(500);
+
+      // Test 2: DNS Resolution
+      try {
+        setTestStatus(2, 'running', '<div class="spinner"></div>');
+
+        const dnsTest = await fetch(SUPABASE_URL, { method: 'HEAD', mode: 'no-cors' });
+
+        setTestStatus(2, 'success', '✅');
+        setTestResult(2, `✅ DNS resolution working\n✅ Can resolve: ${SUPABASE_URL}\n✅ No DNS blocking detected`);
+      } catch (error) {
+        allPassed = false;
+        setTestStatus(2, 'error', '❌');
+        setTestResult(2, `⚠️ DNS resolution issue:\n${error.message}\n\nYour DNS might be blocking Supabase.\nTry changing DNS to Google DNS (8.8.8.8)`);
+        issues.push('DNS resolution issue - change DNS to 8.8.8.8');
+      }
+
+      await sleep(500);
+
+      // Test 3: Supabase Reachability
+      try {
+        setTestStatus(3, 'running', '<div class="spinner"></div>');
+
+        const response = await fetch(SUPABASE_URL);
+        const text = await response.text();
+
+        if (response.ok || response.status === 404) {
+          setTestStatus(3, 'success', '✅');
+          setTestResult(3, `✅ Supabase server is reachable\n✅ Status: ${response.status}\n✅ No network blocking`);
+        } else {
+          throw new Error(`Unexpected status: ${response.status}`);
+        }
+      } catch (error) {
+        allPassed = false;
+        setTestStatus(3, 'error', '❌');
+        setTestResult(3, `❌ Cannot reach Supabase:\n${error.message}\n\nYour ISP or network might be blocking Supabase.\nTry using a VPN or mobile data.`);
+        issues.push('Supabase blocked by network/ISP - try VPN');
+      }
+
+      await sleep(500);
+
+      // Test 4: Auth Health Check
+      try {
+        setTestStatus(4, 'running', '<div class="spinner"></div>');
+
+        const healthResponse = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY
+          }
+        });
+
+        if (!healthResponse.ok) {
+          throw new Error(`Health check failed: ${healthResponse.status}`);
+        }
+
+        const healthData = await healthResponse.json();
+
+        setTestStatus(4, 'success', '✅');
+        setTestResult(4, `✅ Auth service is healthy\n✅ Service: ${healthData.name}\n✅ Description: ${healthData.description}`);
+      } catch (error) {
+        allPassed = false;
+        setTestStatus(4, 'error', '❌');
+        setTestResult(4, `❌ Auth service health check failed:\n${error.message}\n\nSupabase Auth might be down or blocked.\nCheck: https://status.supabase.com/`);
+        issues.push('Auth service down - check status.supabase.com');
+      }
+
+      await sleep(500);
+
+      // Test 5: Auth API Test
+      try {
+        setTestStatus(5, 'running', '<div class="spinner"></div>');
+
+        const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY
+          },
+          body: JSON.stringify({
+            email: 'test@test.com',
+            password: 'test'
+          })
+        });
+
+        const responseText = await authResponse.text();
+
+        // Check if response is HTML (error)
+        if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+          throw new Error('Received HTML error page instead of JSON.\n\nThis indicates:\n- Network proxy/firewall intercepting requests\n- ISP blocking Supabase\n- VPN or antivirus interference\n\nSolution: Try different network or VPN');
+        }
+
+        try {
+          const authData = JSON.parse(responseText);
+          setTestStatus(5, 'success', '✅');
+          setTestResult(5, `✅ Auth API is responding correctly\n✅ Returns JSON (not HTML)\n✅ Ready for login\n\nResponse preview:\n${JSON.stringify(authData, null, 2).substring(0, 200)}...`);
+        } catch {
+          setTestStatus(5, 'success', '✅');
+          setTestResult(5, `✅ Auth API is responding\n✅ Returns valid responses\n✅ Ready for login`);
+        }
+      } catch (error) {
+        allPassed = false;
+        setTestStatus(5, 'error', '❌');
+        setTestResult(5, `❌ Auth API test failed:\n${error.message}\n\nThis is the root cause of your login issue!`);
+        issues.push('Auth API returning HTML - network intercepting requests');
+      }
+
+      // Show summary
+      const summaryEl = document.getElementById('summary');
+      const summaryText = document.getElementById('summaryText');
+      summaryEl.style.display = 'block';
+
+      if (allPassed) {
+        summaryEl.style.background = '#d1fae5';
+        summaryEl.style.borderLeftColor = '#10b981';
+        summaryText.style.color = '#065f46';
+        summaryText.innerHTML = `
+          ✅ All tests passed!\n
+          Your connection to Supabase is working correctly.\n
+          \n
+          If you're still experiencing login issues, the problem might be:\n
+          • Wrong email/password\n
+          • Account doesn't exist\n
+          • Rate limiting (too many attempts)\n
+          • Browser cache (try clearing cache)\n
+          \n
+          Try:\n
+          1. Clear browser cache (Ctrl+Shift+R)\n
+          2. Wait 30 minutes if you've tried many times\n
+          3. Reset password if you forgot it
+        `;
+      } else {
+        summaryText.innerHTML = `
+          ❌ Found ${issues.length} issue(s):\n
+          \n
+          ${issues.map((issue, i) => `${i + 1}. ${issue}`).join('\n')}\n
+          \n
+          Recommended actions:\n
+          ${issues.some(i => i.includes('internet')) ? '• Check your internet connection\n' : ''}
+          ${issues.some(i => i.includes('DNS')) ? '• Change DNS to Google DNS (8.8.8.8)\n' : ''}
+          ${issues.some(i => i.includes('blocked') || i.includes('VPN')) ? '• Try using VPN or mobile data\n' : ''}
+          ${issues.some(i => i.includes('Auth service down')) ? '• Check https://status.supabase.com/\n' : ''}
+          ${issues.some(i => i.includes('HTML')) ? '• Your network is intercepting requests - use VPN\n' : ''}
+          \n
+          For detailed solutions, see FIX_LOGIN_400_ERROR.md
+        `;
+      }
+
+      button.disabled = false;
+      button.textContent = 'Run Diagnostics Again';
+    }
+  </script>
+</body>
+</html>

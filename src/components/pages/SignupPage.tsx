@@ -15,6 +15,8 @@ export function SignupPage() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    username: '',
+    phoneNumber: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -42,14 +44,14 @@ export function SignupPage() {
     setLoading(true);
 
     try {
-      const username = formData.email.split('@')[0];
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
       await signUp({
         email: formData.email,
         password: formData.password,
-        username: username,
+        username: formData.username,
         full_name: fullName,
+        phone_number: formData.phoneNumber,
       });
       console.log('✅ SignupPage: Signup successful');
 
@@ -152,6 +154,31 @@ export function SignupPage() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    placeholder="johndoe (unique username)"
+                    value={formData.username}
+                    onChange={handleChange}
+                    required
+                    pattern="[a-zA-Z0-9_]+"
+                    title="Username can only contain letters, numbers, and underscores"
+                  />
+                  <p className="text-xs text-gray-500">Choose a unique username</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">Phone Number (Optional)</Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    placeholder="+234 800 000 0000"
+                    value={formData.phoneNumber}
+                    onChange={handleChange}
+                  />
                 </div>
 
                 <div className="space-y-2">
