@@ -30,6 +30,7 @@ import SubscriptionPage from './components/pages/SubscriptionPage';
 import PaymentCallbackPage from './components/pages/PaymentCallbackPage';
 import { ReferralDashboardPage } from './components/pages/ReferralDashboardPage';
 import { WithdrawPage } from './components/pages/WithdrawPage';
+import DiagnosticPage from './pages/DiagnosticPage';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -525,6 +526,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+        <Route path="/diagnostic" element={<DiagnosticPage />} />
         <Route
           path="/subscription/callback"
           element={
