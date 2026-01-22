@@ -71,7 +71,8 @@ export default function PaymentCallbackPage() {
 
   const handleContinue = () => {
     if (status === 'success') {
-      navigate('/');
+      // Redirect to feed - user may need to log in again after external redirect
+      navigate('/feed');
     } else {
       navigate('/subscription');
     }
