@@ -138,31 +138,31 @@ export default function SubscriptionPage() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const email = authUser?.email || '';
 
-      // Initialize Paystack payment
-      const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          amount: subscription.amount * 100, // Convert to kobo
-          reference,
-          callback_url: `${window.location.origin}/subscription/callback`,
-          metadata: {
-            subscription_id: subscription.id,
-            plan_name: planName,
-            billing_cycle: billingCycle,
-            user_id: user.id,
+      // Initialize Paystack payment via Supabase Edge Function
+      const { data: paystackData, error: paystackError } = await supabase.functions.invoke(
+        'paystack-initialize',
+        {
+          body: {
+            email,
+            amount: subscription.amount,
+            reference,
+            callback_url: `${window.location.origin}/subscription/callback`,
+            metadata: {
+              subscription_id: subscription.id,
+              plan_name: planName,
+              billing_cycle: billingCycle,
+              user_id: user.id,
+            },
           },
-        }),
-      });
+        }
+      );
 
-      const paystackData = await paystackResponse.json();
+      if (paystackError) {
+        throw new Error(paystackError.message || 'Payment initialization failed');
+      }
 
-      if (!paystackData.status) {
-        throw new Error(paystackData.message || 'Payment initialization failed');
+      if (!paystackData?.status) {
+        throw new Error(paystackData?.message || 'Payment initialization failed');
       }
 
       // Redirect to Paystack payment page

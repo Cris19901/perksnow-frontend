@@ -81,25 +81,31 @@ export default function PaymentCallbackPage() {
           }
         }
       } else if (transaction.status === 'pending') {
-        // Still pending - webhook might not have processed yet
+        // Still pending - verify via Supabase Edge Function
         setMessage('Verifying payment with provider...');
 
-        // Try verifying with Paystack directly
-        const verifyResponse = await fetch(
-          `https://api.paystack.co/transaction/verify/${paymentReference}`,
+        // Try verifying with Paystack via Edge Function
+        const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
+          'paystack-verify',
           {
-            headers: {
-              'Authorization': `Bearer ${import.meta.env.VITE_PAYSTACK_SECRET_KEY}`,
-            },
+            body: { reference: paymentReference },
           }
         );
 
-        const verifyData = await verifyResponse.json();
+        if (verifyError) {
+          console.error('Verification error:', verifyError);
+          setStatus('failed');
+          setMessage('Payment verification failed. Please contact support if amount was deducted.');
+          return;
+        }
 
-        if (verifyData.status && verifyData.data.status === 'success') {
-          // Payment was successful, webhook will process it
+        if (verifyData?.status && verifyData?.data?.payment_status === 'success') {
+          // Payment was successful
           setStatus('success');
-          setMessage('Payment successful! Your subscription will be activated shortly.');
+          setMessage('Payment successful! Your subscription is now active.');
+          if (verifyData.data.subscription) {
+            setSubscriptionDetails(verifyData.data.subscription);
+          }
         } else {
           setStatus('failed');
           setMessage('Payment verification failed. Please contact support if amount was deducted.');
