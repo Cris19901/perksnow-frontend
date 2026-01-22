@@ -29,90 +29,38 @@ export default function PaymentCallbackPage() {
         return;
       }
 
-      // Wait a bit for webhook to process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      setMessage('Verifying payment with provider...');
 
-      // Check payment transaction status
-      const { data: transaction, error: txError } = await supabase
-        .from('payment_transactions')
-        .select('*, subscriptions(*)')
-        .eq('reference', paymentReference)
-        .single();
+      // Use Edge Function to verify - it has service role access and handles everything
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
+        'paystack-verify',
+        {
+          body: { reference: paymentReference },
+        }
+      );
 
-      if (txError || !transaction) {
+      console.log('Verify response:', verifyData, verifyError);
+
+      if (verifyError) {
+        console.error('Verification error:', verifyError);
         setStatus('failed');
-        setMessage('Payment transaction not found. Please contact support.');
+        setMessage('Payment verification failed. Please contact support if amount was deducted.');
         return;
       }
 
-      // Check if payment was successful
-      if (transaction.status === 'success') {
-        // Check subscription status
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('id', transaction.subscription_id)
-          .single();
-
-        if (subscription?.status === 'active') {
-          setStatus('success');
-          setMessage('Payment successful! Your subscription is now active.');
-          setSubscriptionDetails(subscription);
-        } else {
-          // Payment successful but subscription not activated yet
-          // Wait a bit more for webhook
-          await new Promise(resolve => setTimeout(resolve, 3000));
-
-          // Check again
-          const { data: updatedSub } = await supabase
-            .from('subscriptions')
-            .select('*')
-            .eq('id', transaction.subscription_id)
-            .single();
-
-          if (updatedSub?.status === 'active') {
-            setStatus('success');
-            setMessage('Payment successful! Your subscription is now active.');
-            setSubscriptionDetails(updatedSub);
-          } else {
-            setStatus('success');
-            setMessage('Payment received! Your subscription will be activated shortly.');
-            setSubscriptionDetails(updatedSub);
-          }
+      if (verifyData?.status && verifyData?.data?.payment_status === 'success') {
+        // Payment was successful - subscription is already activated by the Edge Function
+        setStatus('success');
+        setMessage('Payment successful! Your subscription is now active.');
+        if (verifyData.data.subscription) {
+          setSubscriptionDetails(verifyData.data.subscription);
         }
-      } else if (transaction.status === 'pending') {
-        // Still pending - verify via Supabase Edge Function
-        setMessage('Verifying payment with provider...');
-
-        // Try verifying with Paystack via Edge Function
-        const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
-          'paystack-verify',
-          {
-            body: { reference: paymentReference },
-          }
-        );
-
-        if (verifyError) {
-          console.error('Verification error:', verifyError);
-          setStatus('failed');
-          setMessage('Payment verification failed. Please contact support if amount was deducted.');
-          return;
-        }
-
-        if (verifyData?.status && verifyData?.data?.payment_status === 'success') {
-          // Payment was successful
-          setStatus('success');
-          setMessage('Payment successful! Your subscription is now active.');
-          if (verifyData.data.subscription) {
-            setSubscriptionDetails(verifyData.data.subscription);
-          }
-        } else {
-          setStatus('failed');
-          setMessage('Payment verification failed. Please contact support if amount was deducted.');
-        }
+      } else if (verifyData?.data?.payment_status === 'pending') {
+        setStatus('failed');
+        setMessage('Payment is still being processed. Please wait a few minutes and check your profile.');
       } else {
         setStatus('failed');
-        setMessage('Payment failed. Please try again.');
+        setMessage('Payment was not successful. Please try again or contact support if amount was deducted.');
       }
     } catch (error: any) {
       console.error('Payment verification error:', error);
