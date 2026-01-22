@@ -39,7 +39,9 @@
       "Bash(winget install:*)",
       "Bash(winget search:*)",
       "Bash(git reset:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(supabase functions logs:*)",
+      "Bash(scoop which:*)"
     ],
     "deny": [],
     "ask": []

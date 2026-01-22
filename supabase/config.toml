@@ -31,5 +31,4 @@ enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
 
-[functions]
-port = 54321
+# Functions are deployed to Supabase cloud

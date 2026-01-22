@@ -527,14 +527,8 @@ function AppContent() {
           }
         />
         <Route path="/diagnostic" element={<DiagnosticPage />} />
-        <Route
-          path="/subscription/callback"
-          element={
-            <ProtectedRoute>
-              <PaymentCallbackPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* Payment callback must be public - user session may not be ready after redirect */}
+        <Route path="/subscription/callback" element={<PaymentCallbackPage />} />
       </Routes>
 
       <CartSheet
