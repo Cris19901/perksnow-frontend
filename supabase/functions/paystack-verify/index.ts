@@ -53,11 +53,44 @@ serve(async (req) => {
     const paymentStatus = paystackData.data.status
 
     if (paymentStatus === 'success') {
-      // Get metadata from Paystack response
+      // Get metadata from Paystack response - this contains the subscription and user info
       const metadata = paystackData.data.metadata || {}
+      console.log('Payment metadata:', JSON.stringify(metadata))
+
+      const subscriptionId = metadata.subscription_id
+      const userId = metadata.user_id
+      const planName = metadata.plan_name || 'pro'
+      const billingCycle = metadata.billing_cycle || 'monthly'
+
+      console.log('Extracted IDs - subscriptionId:', subscriptionId, 'userId:', userId)
+
+      if (!subscriptionId || !userId) {
+        console.error('Missing subscription_id or user_id in metadata')
+        // Try to get from transaction as fallback
+        const { data: transaction, error: txFetchError } = await supabase
+          .from('payment_transactions')
+          .select('subscription_id, user_id')
+          .eq('reference', reference)
+          .single()
+
+        console.log('Fallback transaction lookup:', transaction, 'Error:', txFetchError)
+      }
+
+      // Calculate expiry date
+      const expiresAt = new Date()
+      if (billingCycle === 'yearly') {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+      } else if (billingCycle === 'daily') {
+        expiresAt.setDate(expiresAt.getDate() + 1)
+      } else {
+        expiresAt.setMonth(expiresAt.getMonth() + 1)
+      }
+
+      console.log('Activating subscription:', subscriptionId, 'for user:', userId)
+      console.log('Expires at:', expiresAt.toISOString())
 
       // Update payment transaction
-      await supabase
+      const { error: txUpdateError } = await supabase
         .from('payment_transactions')
         .update({
           status: 'success',
@@ -66,26 +99,15 @@ serve(async (req) => {
         })
         .eq('reference', reference)
 
-      // Get the subscription ID from the transaction
-      const { data: transaction } = await supabase
-        .from('payment_transactions')
-        .select('subscription_id, user_id')
-        .eq('reference', reference)
-        .single()
+      if (txUpdateError) {
+        console.error('Error updating transaction:', txUpdateError)
+      } else {
+        console.log('Transaction updated successfully')
+      }
 
-      if (transaction) {
-        // Calculate expiry date
-        const expiresAt = new Date()
-        const billingCycle = metadata.billing_cycle || 'monthly'
-
-        if (billingCycle === 'yearly') {
-          expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-        } else {
-          expiresAt.setMonth(expiresAt.getMonth() + 1)
-        }
-
-        // Activate subscription
-        await supabase
+      // Activate subscription using ID from metadata
+      if (subscriptionId) {
+        const { error: subError } = await supabase
           .from('subscriptions')
           .update({
             status: 'active',
@@ -93,40 +115,56 @@ serve(async (req) => {
             activated_at: new Date().toISOString(),
             expires_at: expiresAt.toISOString(),
           })
-          .eq('id', transaction.subscription_id)
+          .eq('id', subscriptionId)
 
-        // Update user subscription status
-        await supabase
+        if (subError) {
+          console.error('Error updating subscription:', subError)
+        } else {
+          console.log('Subscription updated successfully')
+        }
+      }
+
+      // Update user subscription status using ID from metadata
+      if (userId) {
+        const { error: userError } = await supabase
           .from('users')
           .update({
-            subscription_tier: metadata.plan_name || 'pro',
+            subscription_tier: planName,
             subscription_status: 'active',
             subscription_expires_at: expiresAt.toISOString(),
           })
-          .eq('id', transaction.user_id)
+          .eq('id', userId)
 
-        // Get updated subscription
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('id', transaction.subscription_id)
-          .single()
-
-        return new Response(
-          JSON.stringify({
-            status: true,
-            message: 'Payment verified and subscription activated',
-            data: {
-              payment_status: paymentStatus,
-              subscription,
-            },
-          }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-          }
-        )
+        if (userError) {
+          console.error('Error updating user:', userError)
+        } else {
+          console.log('User updated successfully')
+        }
       }
+
+      // Get updated subscription
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', subscriptionId)
+        .single()
+
+      console.log('Final subscription state:', subscription)
+
+      return new Response(
+        JSON.stringify({
+          status: true,
+          message: 'Payment verified and subscription activated',
+          data: {
+            payment_status: paymentStatus,
+            subscription,
+          },
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      )
     }
 
     return new Response(

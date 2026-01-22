@@ -71,8 +71,8 @@ export default function PaymentCallbackPage() {
 
   const handleContinue = () => {
     if (status === 'success') {
-      // Redirect to feed - user may need to log in again after external redirect
-      navigate('/feed');
+      // Force a full page reload to refresh auth context with updated subscription status
+      window.location.href = '/feed';
     } else {
       navigate('/subscription');
     }
