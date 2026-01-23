@@ -10,13 +10,23 @@ export async function uploadImage(
   userId: string
 ): Promise<string> {
   // Validate file type
-  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  const allowedImageTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/heic',
+    'image/heif',
+    'image/heic-sequence',
+    'image/heif-sequence'
+  ];
   const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/avi', 'video/mov'];
-  const isImage = allowedImageTypes.includes(file.type);
+  const isImage = allowedImageTypes.includes(file.type.toLowerCase()) || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
   const isVideo = allowedVideoTypes.includes(file.type) || file.type.startsWith('video/');
 
   if (!isImage && !isVideo) {
-    throw new Error('Invalid file type. Please upload an image (JPEG, PNG, WebP, GIF) or video');
+    throw new Error('Invalid file type. Please upload an image (JPEG, PNG, WebP, GIF, HEIC) or video');
   }
 
   // Validate file size

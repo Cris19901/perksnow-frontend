@@ -7,6 +7,7 @@ import { Post } from '../Post';
 import { ProductPost } from '../ProductPost';
 import { ReelPost } from '../ReelPost';
 import { ReelsViewer } from '../ReelsViewerV2';
+import { ActivityPost } from '../ActivityPost';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Button } from '../ui/button';
@@ -45,6 +46,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [reels, setReels] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showReelsViewer, setShowReelsViewer] = useState(false);
@@ -143,6 +145,33 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
         // Don't throw error if RPC doesn't exist, just continue without reels
         reels = reelsError ? [] : (reelsData || []);
+
+        // Fetch activities (profile/cover updates)
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from('activities')
+          .select(`
+            id,
+            user_id,
+            activity_type,
+            content,
+            image_url,
+            created_at,
+            users:user_id (
+              id,
+              username,
+              full_name,
+              avatar_url
+            )
+          `)
+          .in('activity_type', ['profile_update', 'cover_update'])
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        // Don't throw error if table doesn't exist, just continue without activities
+        if (!activitiesError && activitiesData) {
+          setActivities(activitiesData);
+        }
       }
 
       // Transform posts data to match the Post component format
@@ -310,9 +339,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     setShowReelsViewer(true);
   };
 
-  // Mix posts, products, and reels for a varied feed with shuffling
+  // Mix posts, products, reels, and activities for a varied feed with shuffling
   const createMixedFeed = () => {
-    const feed: Array<{ type: 'post' | 'product' | 'reel'; data: any }> = [];
+    const feed: Array<{ type: 'post' | 'product' | 'reel' | 'activity'; data: any }> = [];
 
     // Add all posts
     posts.forEach(post => feed.push({ type: 'post', data: post }));
@@ -322,6 +351,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
     // Add all reels
     reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
+
+    // Add all activities
+    activities.forEach(activity => feed.push({ type: 'activity', data: activity }));
 
     // Sort by created_at first
     const sortedFeed = feed.sort((a, b) => {
@@ -449,6 +481,21 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                     return <ProductPost key={`product-${item.data.id}`} {...item.data} onAddToCart={onAddToCart} />;
                   } else if (item.type === 'reel') {
                     return <ReelPost key={`reel-${item.data.reel_id}`} {...item.data} onReelClick={handleReelClick} />;
+                  } else if (item.type === 'activity') {
+                    return (
+                      <ActivityPost
+                        key={`activity-${item.data.id}`}
+                        user={{
+                          username: item.data.users?.username || 'unknown',
+                          full_name: item.data.users?.full_name || 'Unknown User',
+                          avatar_url: item.data.users?.avatar_url || ''
+                        }}
+                        activity_type={item.data.activity_type}
+                        content={item.data.content}
+                        image_url={item.data.image_url}
+                        timestamp={formatTimestamp(item.data.created_at)}
+                      />
+                    );
                   }
                   return null;
                 })}
