@@ -18,28 +18,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    console.log('🔍 Checking for expired subscriptions...')
+    console.log('🔍 Checking for expired subscriptions with grace period support...')
 
-    // Find all users with expired subscriptions that are still marked as active
-    const { data: expiredUsers, error: fetchError } = await supabase
-      .from('users')
-      .select('id, username, subscription_tier, subscription_expires_at')
-      .eq('subscription_status', 'active')
-      .neq('subscription_tier', 'free')
-      .lt('subscription_expires_at', new Date().toISOString())
+    // Call the grace period function to handle expirations
+    const { data: results, error: expireError } = await supabase
+      .rpc('expire_subscriptions_with_grace')
 
-    if (fetchError) {
-      console.error('❌ Error fetching expired subscriptions:', fetchError)
-      throw fetchError
+    if (expireError) {
+      console.error('❌ Error processing expirations:', expireError)
+      throw expireError
     }
 
-    console.log(`📊 Found ${expiredUsers?.length || 0} expired subscriptions`)
+    console.log(`📊 Processed ${results?.length || 0} subscription actions`)
 
-    if (!expiredUsers || expiredUsers.length === 0) {
+    if (!results || results.length === 0) {
       return new Response(
         JSON.stringify({
           status: true,
-          message: 'No expired subscriptions found',
+          message: 'No subscriptions to process',
           count: 0,
         }),
         {
@@ -49,54 +45,39 @@ serve(async (req) => {
       )
     }
 
-    // Downgrade all expired users to free tier
-    const userIds = expiredUsers.map(u => u.id)
+    // Group actions by type
+    const gracePeriodUsers = results.filter(r => r.action === 'entered_grace')
+    const fullyExpiredUsers = results.filter(r => r.action === 'fully_expired')
 
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        subscription_tier: 'free',
-        subscription_status: 'inactive',
-      })
-      .in('id', userIds)
+    console.log(`✅ ${gracePeriodUsers.length} users entered grace period`)
+    console.log(`✅ ${fullyExpiredUsers.length} subscriptions fully expired`)
 
-    if (updateError) {
-      console.error('❌ Error updating users:', updateError)
-      throw updateError
-    }
+    // Send notifications
+    gracePeriodUsers.forEach(user => {
+      supabase.functions.invoke('send-subscription-notification', {
+        body: {
+          type: 'expiry_reminder',
+          userId: user.user_id,
+        },
+      }).catch((err) => console.error('Grace period email error for user:', user.user_id, err))
+    })
 
-    // Also update their subscriptions table
-    const { error: subUpdateError } = await supabase
-      .from('subscriptions')
-      .update({
-        status: 'expired',
-      })
-      .in('user_id', userIds)
-      .eq('status', 'active')
-
-    if (subUpdateError) {
-      console.error('❌ Error updating subscriptions:', subUpdateError)
-    }
-
-    console.log(`✅ Successfully expired ${expiredUsers.length} subscriptions`)
-
-    // Send expiry notification emails (non-blocking)
-    expiredUsers.forEach(user => {
+    fullyExpiredUsers.forEach(user => {
       supabase.functions.invoke('send-subscription-notification', {
         body: {
           type: 'expired',
-          userId: user.id,
-          subscriptionTier: user.subscription_tier,
+          userId: user.user_id,
         },
-      }).catch((err) => console.error('Expiry email error for user:', user.id, err))
+      }).catch((err) => console.error('Expiry email error for user:', user.user_id, err))
     })
 
     return new Response(
       JSON.stringify({
         status: true,
-        message: `Expired ${expiredUsers.length} subscriptions`,
-        count: expiredUsers.length,
-        users: expiredUsers.map(u => ({ id: u.id, username: u.username })),
+        message: `Processed ${results.length} subscription actions`,
+        grace_period_entered: gracePeriodUsers.length,
+        fully_expired: fullyExpiredUsers.length,
+        details: results,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
