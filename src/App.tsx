@@ -24,6 +24,7 @@ import { AdminReferralSettingsPage } from './components/pages/AdminReferralSetti
 import { AdminSignupBonusPage } from './components/pages/AdminSignupBonusPage';
 import { AdminUserManagementPage } from './components/pages/AdminUserManagementPage';
 import AdminContentModerationPage from './components/pages/AdminContentModerationPage';
+import { AdminSubscriptionAnalytics } from './components/pages/AdminSubscriptionAnalytics';
 import { HashtagPage } from './components/pages/HashtagPage';
 import { PeoplePage } from './components/pages/PeoplePage';
 import SubscriptionPage from './components/pages/SubscriptionPage';
@@ -516,6 +517,14 @@ function AppContent() {
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscription-analytics"
+          element={
+            <ProtectedRoute>
+              <AdminSubscriptionAnalytics />
             </ProtectedRoute>
           }
         />

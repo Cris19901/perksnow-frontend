@@ -100,6 +100,14 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       stats: `${stats.totalUsers} users`
     },
     {
+      title: 'Subscription Analytics',
+      description: 'View subscription revenue, metrics, and performance',
+      icon: TrendingUp,
+      color: 'purple',
+      path: '/admin/subscription-analytics',
+      stats: 'Revenue tracking'
+    },
+    {
       title: 'Point Settings',
       description: 'Configure point values, limits, and conversion rates',
       icon: Zap,
