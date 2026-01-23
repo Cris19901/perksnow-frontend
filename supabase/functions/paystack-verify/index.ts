@@ -59,8 +59,10 @@ serve(async (req) => {
 
       const subscriptionId = metadata.subscription_id
       const userId = metadata.user_id
-      const planName = metadata.plan_name || 'pro'
       const billingCycle = metadata.billing_cycle || 'monthly'
+      // Use the plan name directly (daily, weekly, pro) - the frontend checks for all paid tiers
+      const planName = metadata.plan_name || 'pro'
+      const planTier = planName.toLowerCase()
 
       console.log('Extracted IDs - subscriptionId:', subscriptionId, 'userId:', userId)
 
@@ -76,13 +78,16 @@ serve(async (req) => {
         console.log('Fallback transaction lookup:', transaction, 'Error:', txFetchError)
       }
 
-      // Calculate expiry date
+      // Calculate expiry date based on plan tier
       const expiresAt = new Date()
-      if (billingCycle === 'yearly') {
-        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-      } else if (billingCycle === 'daily') {
+      if (planTier === 'daily') {
         expiresAt.setDate(expiresAt.getDate() + 1)
+      } else if (planTier === 'weekly') {
+        expiresAt.setDate(expiresAt.getDate() + 7)
+      } else if (billingCycle === 'yearly') {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
       } else {
+        // Default to monthly for 'pro' plan
         expiresAt.setMonth(expiresAt.getMonth() + 1)
       }
 
@@ -129,7 +134,7 @@ serve(async (req) => {
         const { error: userError } = await supabase
           .from('users')
           .update({
-            subscription_tier: planName,
+            subscription_tier: planTier,
             subscription_status: 'active',
             subscription_expires_at: expiresAt.toISOString(),
           })

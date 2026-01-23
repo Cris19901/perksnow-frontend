@@ -251,10 +251,15 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
       if (error) throw error;
 
-      // Check if user has active Pro subscription
-      const isPro = data?.subscription_tier === 'pro'
+      console.log('📊 FeedPage: Fetched subscription data:', data);
+
+      // Check if user has active Pro subscription (any paid tier: pro, daily, weekly)
+      const paidTiers = ['pro', 'daily', 'weekly'];
+      const isPro = paidTiers.includes(data?.subscription_tier)
         && data?.subscription_status === 'active'
         && (!data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date());
+
+      console.log('📊 FeedPage: Is Pro?', isPro, 'Tier:', data?.subscription_tier, 'Status:', data?.subscription_status);
 
       setSubscriptionTier(isPro ? 'pro' : 'free');
     } catch (err) {
