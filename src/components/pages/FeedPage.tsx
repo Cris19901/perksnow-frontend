@@ -6,7 +6,7 @@ import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
 import { ProductPost } from '../ProductPost';
 import { ReelPost } from '../ReelPost';
-import { ReelsViewer } from '../ReelsViewer';
+import { ReelsViewer } from '../ReelsViewerV2';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Button } from '../ui/button';
