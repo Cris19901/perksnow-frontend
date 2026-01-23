@@ -80,6 +80,17 @@ serve(async (req) => {
 
     console.log(`✅ Successfully expired ${expiredUsers.length} subscriptions`)
 
+    // Send expiry notification emails (non-blocking)
+    expiredUsers.forEach(user => {
+      supabase.functions.invoke('send-subscription-notification', {
+        body: {
+          type: 'expired',
+          userId: user.id,
+          subscriptionTier: user.subscription_tier,
+        },
+      }).catch((err) => console.error('Expiry email error for user:', user.id, err))
+    })
+
     return new Response(
       JSON.stringify({
         status: true,

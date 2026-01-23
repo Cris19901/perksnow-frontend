@@ -218,7 +218,16 @@ export default function SubscriptionPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4">Choose Your Plan</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-4xl font-bold flex-1">Choose Your Plan</h1>
+          <Button
+            variant="outline"
+            onClick={() => navigate('/subscription/history')}
+            className="hidden md:flex"
+          >
+            Payment History
+          </Button>
+        </div>
         <p className="text-gray-600 dark:text-gray-400 text-lg mb-6">
           Upgrade to Pro to unlock withdrawals and premium features
         </p>

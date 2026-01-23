@@ -28,6 +28,7 @@ import { HashtagPage } from './components/pages/HashtagPage';
 import { PeoplePage } from './components/pages/PeoplePage';
 import SubscriptionPage from './components/pages/SubscriptionPage';
 import PaymentCallbackPage from './components/pages/PaymentCallbackPage';
+import PaymentHistoryPage from './components/pages/PaymentHistoryPage';
 import { ReferralDashboardPage } from './components/pages/ReferralDashboardPage';
 import { WithdrawPage } from './components/pages/WithdrawPage';
 import DiagnosticPage from './pages/DiagnosticPage';
@@ -527,6 +528,14 @@ function AppContent() {
           }
         />
         <Route path="/diagnostic" element={<DiagnosticPage />} />
+        <Route
+          path="/subscription/history"
+          element={
+            <ProtectedRoute>
+              <PaymentHistoryPage />
+            </ProtectedRoute>
+          }
+        />
         {/* Payment callback must be public - user session may not be ready after redirect */}
         <Route path="/subscription/callback" element={<PaymentCallbackPage />} />
       </Routes>

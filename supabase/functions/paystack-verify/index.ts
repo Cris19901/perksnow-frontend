@@ -156,6 +156,28 @@ serve(async (req) => {
 
       console.log('Final subscription state:', subscription)
 
+      // Send welcome and receipt emails (non-blocking - don't wait for response)
+      if (userId && subscriptionId) {
+        supabase.functions.invoke('send-subscription-notification', {
+          body: {
+            type: 'welcome',
+            userId,
+            subscriptionTier: planTier,
+            expiresAt: expiresAt.toISOString(),
+          },
+        }).catch((err) => console.error('Welcome email error:', err))
+
+        supabase.functions.invoke('send-subscription-notification', {
+          body: {
+            type: 'receipt',
+            userId,
+            subscriptionTier: planTier,
+            amount: paystackData.data.amount,
+            reference,
+          },
+        }).catch((err) => console.error('Receipt email error:', err))
+      }
+
       return new Response(
         JSON.stringify({
           status: true,
