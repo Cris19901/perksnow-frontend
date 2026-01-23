@@ -352,7 +352,7 @@ export function StoryViewer({ userId, onClose }: StoryViewerProps) {
                 e.stopPropagation();
                 onClose();
               }}
-              className="text-white hover:bg-white/20 rounded-full p-2 h-auto"
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2 h-auto shadow-lg transition-all duration-200 border-2 border-white/30"
             >
               <X className="w-5 h-5" />
             </Button>

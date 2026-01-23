@@ -30,12 +30,20 @@ export async function uploadImage(
     throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
   }
 
-  // Get current session
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) {
-    console.error('Session error:', sessionError);
-    throw new Error('Authentication error. Please try logging in again.');
+  // Get current session and refresh if needed
+  let session = (await supabase.auth.getSession()).data.session;
+
+  // If no session or session is about to expire, try to refresh
+  if (!session || (session.expires_at && session.expires_at * 1000 < Date.now() + 60000)) {
+    console.log('Session expired or expiring soon, refreshing...');
+    const { data, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !data.session) {
+      console.error('Session refresh error:', refreshError);
+      throw new Error('Authentication error. Please try logging in again.');
+    }
+    session = data.session;
   }
+
   if (!session) {
     console.error('No session found');
     throw new Error('Not authenticated. Please log in to upload files.');
@@ -53,20 +61,31 @@ export async function uploadImage(
     throw new Error('Supabase URL not configured');
   }
 
-  // Retry logic for more reliable uploads
+  // Retry logic for more reliable uploads with exponential backoff
   let lastError: Error | null = null;
-  const maxRetries = 2;
+  const maxRetries = 3;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       if (attempt > 0) {
-        console.log(`Retry attempt ${attempt}/${maxRetries}...`);
-        // Wait a bit before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        // Exponential backoff: 1s, 2s, 4s
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`Retry attempt ${attempt}/${maxRetries} after ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+        // Refresh session before retry to avoid token expiration
+        const { data } = await supabase.auth.refreshSession();
+        if (data.session) {
+          session = data.session;
+          console.log('Session refreshed for retry');
+        }
       }
 
-      // Step 1: Get pre-signed URL from Edge Function
+      // Step 1: Get pre-signed URL from Edge Function with timeout
       console.log('Requesting pre-signed URL...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
       const urlResponse = await fetch(`${supabaseUrl}/functions/v1/generate-upload-url`, {
         method: 'POST',
         headers: {
@@ -79,7 +98,10 @@ export async function uploadImage(
           fileType: file.type,
           fileSize: file.size,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!urlResponse.ok) {
         const errorText = await urlResponse.text();
@@ -90,14 +112,20 @@ export async function uploadImage(
       const { uploadUrl, publicUrl, fileKey } = await urlResponse.json();
       console.log('Pre-signed URL received, uploading to R2...');
 
-      // Step 2: Upload directly to R2 using pre-signed URL
+      // Step 2: Upload directly to R2 using pre-signed URL with timeout
+      const uploadController = new AbortController();
+      const uploadTimeoutId = setTimeout(() => uploadController.abort(), 60000); // 60 second timeout for upload
+
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': file.type,
         },
         body: file,
+        signal: uploadController.signal,
       });
+
+      clearTimeout(uploadTimeoutId);
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
@@ -119,6 +147,11 @@ export async function uploadImage(
     } catch (error: any) {
       lastError = error;
       console.error(`Upload attempt ${attempt + 1} failed:`, error);
+
+      // Handle abort/timeout errors
+      if (error.name === 'AbortError') {
+        lastError = new Error('Upload timeout. Please check your connection and try again.');
+      }
 
       // Don't retry on certain errors
       if (error.message.includes('Authentication') ||

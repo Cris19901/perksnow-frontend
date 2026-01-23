@@ -51,25 +51,45 @@ export function ReelsViewer({ initialReelId, openComments = false, onClose }: Re
     // Auto-play current video and pause others
     const currentReel = reels[currentIndex];
     if (currentReel) {
+      // Pause all other videos first
+      videoRefs.current.forEach((video, reelId) => {
+        if (reelId !== currentReel.reel_id) {
+          video.pause();
+          video.currentTime = 0; // Reset to beginning
+        }
+      });
+
+      // Then play current video with a small delay to ensure it's loaded
       const currentVideo = videoRefs.current.get(currentReel.reel_id);
       if (currentVideo) {
-        currentVideo.play().catch(err => console.log('Autoplay failed:', err));
+        // Reset to beginning and load
+        currentVideo.currentTime = 0;
+        currentVideo.load();
+
+        // Small delay to ensure video is ready
+        const playTimeout = setTimeout(() => {
+          currentVideo.play().catch(err => {
+            console.log('Autoplay failed:', err);
+            // Retry once after a short delay
+            setTimeout(() => {
+              currentVideo.play().catch(() => {});
+            }, 100);
+          });
+        }, 50);
 
         // Track view after 3 seconds
-        setTimeout(() => {
+        const viewTimeout = setTimeout(() => {
           if (!viewTracked.has(currentReel.reel_id)) {
             trackView(currentReel.reel_id);
             setViewTracked(prev => new Set(prev).add(currentReel.reel_id));
           }
         }, 3000);
-      }
 
-      // Pause other videos
-      videoRefs.current.forEach((video, reelId) => {
-        if (reelId !== currentReel.reel_id) {
-          video.pause();
-        }
-      });
+        return () => {
+          clearTimeout(playTimeout);
+          clearTimeout(viewTimeout);
+        };
+      }
     }
   }, [currentIndex, reels]);
 
@@ -167,11 +187,13 @@ export function ReelsViewer({ initialReelId, openComments = false, onClose }: Re
   const handleScroll = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
 
-    if (e.deltaY > 0 && currentIndex < reels.length - 1) {
-      // Scroll down - next reel
+    // Scroll up (negative deltaY) = next reel
+    // Scroll down (positive deltaY) = previous reel
+    if (e.deltaY < 0 && currentIndex < reels.length - 1) {
+      // Scroll up - next reel
       setCurrentIndex(prev => prev + 1);
-    } else if (e.deltaY < 0 && currentIndex > 0) {
-      // Scroll up - previous reel
+    } else if (e.deltaY > 0 && currentIndex > 0) {
+      // Scroll down - previous reel
       setCurrentIndex(prev => prev - 1);
     }
   }, [currentIndex, reels.length]);
@@ -205,15 +227,15 @@ export function ReelsViewer({ initialReelId, openComments = false, onClose }: Re
   };
 
   const handleTouchEnd = () => {
-    if (touchStart - touchEnd > 75) {
-      // Swipe up - next reel
+    const swipeDistance = touchStart - touchEnd;
+
+    if (swipeDistance > 75) {
+      // Swipe up (finger moves up, video scrolls down to show next)
       if (currentIndex < reels.length - 1) {
         setCurrentIndex(prev => prev + 1);
       }
-    }
-
-    if (touchStart - touchEnd < -75) {
-      // Swipe down - previous reel
+    } else if (swipeDistance < -75) {
+      // Swipe down (finger moves down, video scrolls up to show previous)
       if (currentIndex > 0) {
         setCurrentIndex(prev => prev - 1);
       }
@@ -306,25 +328,24 @@ export function ReelsViewer({ initialReelId, openComments = false, onClose }: Re
               }
             }}
             onEnded={() => {
-              // Auto-advance to next reel when current video ends
-              if (currentIndex < reels.length - 1) {
-                setCurrentIndex(prev => prev + 1);
-              } else {
-                // If we're on the last reel, loop back to the first one
-                setCurrentIndex(0);
+              // Loop the current video instead of auto-advancing
+              const video = videoRefs.current.get(currentReel.reel_id);
+              if (video) {
+                video.currentTime = 0;
+                video.play().catch(() => {});
               }
             }}
           />
 
-          {/* Top Bar */}
-          <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/50 to-transparent z-10">
+          {/* Top Bar with Close Button */}
+          <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent z-10">
             <div className="flex items-center justify-between">
               <h2 className="text-white font-semibold text-lg">Reels</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="text-white hover:text-red-400 hover:bg-white/20 transition-colors text-2xl font-bold h-10 w-10 p-0 rounded-full"
+                className="bg-red-500 hover:bg-red-600 text-white text-2xl font-bold h-12 w-12 p-0 rounded-full shadow-lg transition-all duration-200 border-2 border-white/30"
               >
                 ✕
               </Button>
