@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Play, Eye, Heart, MessageCircle, Share2, Maximize2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -40,6 +41,7 @@ export function ReelPost({
   onLikeUpdate,
 }: ReelPostProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [liked, setLiked] = useState(is_liked);
   const [currentLikesCount, setCurrentLikesCount] = useState(likes_count);
   const [isLiking, setIsLiking] = useState(false);
@@ -142,13 +144,19 @@ export function ReelPost({
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/profile/${username}`);
+          }}
+        >
           <Avatar>
             <AvatarImage src={avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`} />
             <AvatarFallback>{(full_name || username)[0].toUpperCase()}</AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-semibold">{full_name || username}</p>
+            <p className="font-semibold hover:underline">{full_name || username}</p>
             <p className="text-sm text-gray-500">@{username} • {getTimeAgo(created_at)}</p>
           </div>
         </div>
