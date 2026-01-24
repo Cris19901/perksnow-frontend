@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Plyr from 'plyr-react';
-import 'plyr-react/plyr.css';
+import 'plyr/dist/plyr.css';
 
 interface ReelPlayerProProps {
   videoUrl: string;
@@ -48,15 +48,7 @@ export function ReelPlayerPro({
       fallback: true,
       iosNative: true, // Use native iOS fullscreen
     },
-    ratio: '9:16', // Vertical video ratio (reels format)
     storage: { enabled: false }, // Don't save user preferences
-    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-    quality: {
-      default: 720,
-      options: [360, 480, 720, 1080],
-    },
-    // Disable download button for content protection
-    disableContextMenu: false,
     // Keyboard shortcuts
     keyboard: { focused: true, global: false },
     // Tooltips

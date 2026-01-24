@@ -1,7 +1,7 @@
 /* Reel Player Pro - Custom Styling for Professional Video Player */
 
 /* Import Plyr base styles */
-@import 'plyr-react/plyr.css';
+@import 'plyr/dist/plyr.css';
 
 /* Brand color customization */
 .reel-player-pro {
