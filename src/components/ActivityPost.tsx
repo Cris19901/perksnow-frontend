@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { User, Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ export function ActivityPost({
   timestamp,
   onDelete,
 }: ActivityPostProps) {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [deleting, setDeleting] = useState(false);
 
@@ -87,13 +89,29 @@ export function ActivityPost({
     <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-purple-200 transition-colors">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Avatar className="w-10 h-10 sm:w-12 sm:h-12">
-          <AvatarImage src={user.avatar_url} alt={user.full_name} />
-          <AvatarFallback>{user.full_name?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
-        </Avatar>
+        <div
+          className="cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/profile/${user.username}`);
+          }}
+        >
+          <Avatar className="w-10 h-10 sm:w-12 sm:h-12">
+            <AvatarImage src={user.avatar_url} alt={user.full_name} />
+            <AvatarFallback>{user.full_name?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+          </Avatar>
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 truncate">{user.full_name}</h3>
+            <h3
+              className="font-semibold text-gray-900 truncate cursor-pointer hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/profile/${user.username}`);
+              }}
+            >
+              {user.full_name}
+            </h3>
             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getActivityColor()}`}>
               {getActivityIcon()}
               <span className="hidden sm:inline">
@@ -101,7 +119,15 @@ export function ActivityPost({
               </span>
             </div>
           </div>
-          <p className="text-sm text-gray-600">@{user.username}</p>
+          <p
+            className="text-sm text-gray-600 cursor-pointer hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/profile/${user.username}`);
+            }}
+          >
+            @{user.username}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 whitespace-nowrap">{timestamp}</span>
