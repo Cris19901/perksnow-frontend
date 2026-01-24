@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { ReelComments } from './ReelComments';
 import { Sheet, SheetContent } from './ui/sheet';
-import { ReelPlayerPro } from './ReelPlayerPro';
+import { ReelPlayerSimple } from './ReelPlayerSimple';
 
 interface Reel {
   reel_id: string;
@@ -378,13 +378,11 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
 
         {/* Video Player */}
         <div className="relative w-full h-full flex items-center justify-center">
-          <ReelPlayerPro
+          <ReelPlayerSimple
             key={currentReel.reel_id}
             videoUrl={currentReel.video_url}
             muted={muted}
-            autoplay={true}
             onTimeUpdate={handleTimeUpdate}
-            className="w-full h-full"
           />
 
           {/* Overlay Content */}
