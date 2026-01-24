@@ -168,9 +168,18 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           .order('created_at', { ascending: false })
           .limit(10);
 
+        // Debug logging
+        console.log('📸 FeedPage: Activities fetch result:', {
+          error: activitiesError,
+          count: activitiesData?.length || 0,
+          data: activitiesData
+        });
+
         // Don't throw error if table doesn't exist, just continue without activities
         if (!activitiesError && activitiesData) {
           setActivities(activitiesData);
+        } else if (activitiesError) {
+          console.error('❌ FeedPage: Error fetching activities:', activitiesError);
         }
       }
 
