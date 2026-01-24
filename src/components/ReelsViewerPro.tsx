@@ -357,6 +357,8 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
 
   const currentReel = reels[currentIndex];
 
+  console.log('🟣 ReelsViewerPro: Rendering with reel:', currentReel?.reel_id, currentReel?.video_url);
+
   return (
     <>
       <div

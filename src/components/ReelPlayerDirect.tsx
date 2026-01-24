@@ -12,9 +12,14 @@ export function ReelPlayerDirect({ videoUrl, muted = true, onTimeUpdate }: ReelP
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Plyr | null>(null);
 
+  console.log('🔵 ReelPlayerDirect: Component rendered for video:', videoUrl);
+
   useEffect(() => {
+    console.log('🟢 ReelPlayerDirect: useEffect triggered');
+    console.log('🟢 ReelPlayerDirect: videoRef.current:', videoRef.current);
+
     if (!videoRef.current) {
-      console.error('❌ ReelPlayerDirect: Video ref is null');
+      console.error('❌ ReelPlayerDirect: Video ref is null - DOM element not found!');
       return;
     }
 
