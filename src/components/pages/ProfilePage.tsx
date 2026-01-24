@@ -655,6 +655,8 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                       return (
                         <ActivityPost
                           key={`activity-${activity.id}`}
+                          id={activity.id}
+                          user_id={activity.user_id}
                           user={{
                             username: activity.users?.username || 'unknown',
                             full_name: activity.users?.full_name || 'Unknown User',
@@ -664,6 +666,9 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                           content={activity.content}
                           image_url={activity.image_url}
                           timestamp={formatTimestamp(activity.created_at)}
+                          onDelete={(activityId) => {
+                            setActivities(prev => prev.filter(a => a.id !== activityId));
+                          }}
                         />
                       );
                     }

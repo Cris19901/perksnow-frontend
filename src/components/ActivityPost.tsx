@@ -1,7 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { User, Camera, Image as ImageIcon } from 'lucide-react';
+import { User, Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Button } from './ui/button';
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface ActivityPostProps {
+  id: string;
+  user_id: string;
   user: {
     username: string;
     full_name: string;
@@ -11,15 +18,49 @@ interface ActivityPostProps {
   content: string;
   image_url: string;
   timestamp: string;
+  onDelete?: (activityId: string) => void;
 }
 
 export function ActivityPost({
+  id,
+  user_id,
   user,
   activity_type,
   content,
   image_url,
   timestamp,
+  onDelete,
 }: ActivityPostProps) {
+  const { user: currentUser } = useAuth();
+  const [deleting, setDeleting] = useState(false);
+
+  const isOwnActivity = currentUser?.id === user_id;
+
+  const handleDelete = async () => {
+    if (!isOwnActivity || !currentUser) return;
+
+    if (!confirm('Are you sure you want to delete this activity?')) return;
+
+    try {
+      setDeleting(true);
+
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', currentUser.id); // Ensure user can only delete own activities
+
+      if (error) throw error;
+
+      toast.success('Activity deleted');
+      onDelete?.(id);
+    } catch (error: any) {
+      console.error('Error deleting activity:', error);
+      toast.error('Failed to delete activity');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const getActivityIcon = () => {
     switch (activity_type) {
       case 'profile_update':
@@ -62,7 +103,20 @@ export function ActivityPost({
           </div>
           <p className="text-sm text-gray-600">@{user.username}</p>
         </div>
-        <span className="text-sm text-gray-500 whitespace-nowrap">{timestamp}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 whitespace-nowrap">{timestamp}</span>
+          {isOwnActivity && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
