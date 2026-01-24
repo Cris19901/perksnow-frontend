@@ -4,6 +4,7 @@ import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { convertHeicToJpeg } from '@/lib/heic-converter';
 import {
   Upload,
   User,
@@ -98,37 +99,53 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
     }
   };
 
-  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size must be less than 5MB');
+    if (!file) return;
+
+    try {
+      // Convert HEIC to JPEG if needed
+      const convertedFile = await convertHeicToJpeg(file);
+
+      if (convertedFile.size > 20 * 1024 * 1024) {
+        toast.error('File size must be less than 20MB');
         return;
       }
 
-      setProfilePicture(file);
+      setProfilePicture(convertedFile);
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfilePicturePreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(convertedFile);
+    } catch (error: any) {
+      console.error('Error processing image:', error);
+      toast.error(error.message || 'Failed to process image');
     }
   };
 
-  const handleBackgroundImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBackgroundImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB');
+    if (!file) return;
+
+    try {
+      // Convert HEIC to JPEG if needed
+      const convertedFile = await convertHeicToJpeg(file);
+
+      if (convertedFile.size > 20 * 1024 * 1024) {
+        toast.error('File size must be less than 20MB');
         return;
       }
 
-      setBackgroundImage(file);
+      setBackgroundImage(convertedFile);
       const reader = new FileReader();
       reader.onloadend = () => {
         setBackgroundImagePreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(convertedFile);
+    } catch (error: any) {
+      console.error('Error processing image:', error);
+      toast.error(error.message || 'Failed to process image');
     }
   };
 

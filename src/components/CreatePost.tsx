@@ -7,6 +7,7 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { convertFilesIfNeeded } from '@/lib/heic-converter';
 import {
   Popover,
   PopoverContent,
@@ -71,35 +72,43 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
     setError(null);
 
-    // Validate and create preview for each file
-    const newImages: UploadedImage[] = [];
-    for (const file of files) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name} is not an image file`);
-        continue;
+    try {
+      // Convert HEIC files to JPEG
+      const convertedFiles = await convertFilesIfNeeded(files);
+
+      // Validate and create preview for each file
+      const newImages: UploadedImage[] = [];
+      for (const file of convertedFiles) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          toast.error(`${file.name} is not an image file`);
+          continue;
+        }
+
+        // Validate file size (max 20MB)
+        if (file.size > 20 * 1024 * 1024) {
+          toast.error(`${file.name} is too large (max 20MB)`);
+          continue;
+        }
+
+        // Create preview
+        const preview = URL.createObjectURL(file);
+        newImages.push({
+          file,
+          preview,
+          uploading: false,
+        });
       }
 
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(`${file.name} is too large (max 10MB)`);
-        continue;
+      setUploadedImages(prev => [...prev, ...newImages]);
+    } catch (error: any) {
+      console.error('Error processing images:', error);
+      toast.error(error.message || 'Failed to process images');
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
-
-      // Create preview
-      const preview = URL.createObjectURL(file);
-      newImages.push({
-        file,
-        preview,
-        uploading: false,
-      });
-    }
-
-    setUploadedImages(prev => [...prev, ...newImages]);
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
     }
   };
 

@@ -13,6 +13,7 @@ import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/image-upload-presigned';
+import { convertHeicToJpeg } from '@/lib/heic-converter';
 import { toast } from 'sonner';
 
 interface ProfilePageProps {
@@ -169,24 +170,27 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
-      return;
-    }
-
     try {
+      // Convert HEIC to JPEG if needed
+      const convertedFile = await convertHeicToJpeg(file);
+
+      // Validate file type
+      if (!convertedFile.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+
+      // Validate file size (max 20MB)
+      if (convertedFile.size > 20 * 1024 * 1024) {
+        toast.error('Image must be less than 20MB');
+        return;
+      }
+
       setUploadingAvatar(true);
       toast.loading('Uploading profile picture...');
 
       // Upload to R2
-      const avatarUrl = await uploadImage(file, 'avatars', user.id);
+      const avatarUrl = await uploadImage(convertedFile, 'avatars', user.id);
 
       // Update user profile
       const { error } = await supabase
@@ -214,24 +218,27 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be less than 10MB');
-      return;
-    }
-
     try {
+      // Convert HEIC to JPEG if needed
+      const convertedFile = await convertHeicToJpeg(file);
+
+      // Validate file type
+      if (!convertedFile.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+
+      // Validate file size (max 20MB)
+      if (convertedFile.size > 20 * 1024 * 1024) {
+        toast.error('Image must be less than 20MB');
+        return;
+      }
+
       setUploadingCover(true);
       toast.loading('Uploading cover photo...');
 
       // Upload to R2
-      const coverUrl = await uploadImage(file, 'covers', user.id);
+      const coverUrl = await uploadImage(convertedFile, 'covers', user.id);
 
       // Update user profile
       const { error } = await supabase

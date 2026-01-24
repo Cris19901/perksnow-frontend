@@ -11,6 +11,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { MobileBottomNav } from '../MobileBottomNav';
+import { convertFilesIfNeeded } from '@/lib/heic-converter';
 
 const categories = [
   'Electronics',
@@ -88,7 +89,10 @@ export function CreateProductPage({ onNavigate, onCartClick, cartItemsCount }: C
     setError(null);
 
     try {
-      for (const file of Array.from(files)) {
+      // Convert HEIC files to JPEG
+      const convertedFiles = await convertFilesIfNeeded(Array.from(files));
+
+      for (const file of convertedFiles) {
         if (images.length >= 5) break;
 
         // Validate file type
