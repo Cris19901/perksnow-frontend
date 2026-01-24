@@ -300,7 +300,7 @@ export function CreateProductPage({ onNavigate, onCartClick, cartItemsCount }: C
                 type="file"
                 ref={fileInputRef}
                 onChange={handleImageUpload}
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 multiple
                 className="hidden"
               />

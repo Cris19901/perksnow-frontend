@@ -22,19 +22,31 @@ export async function uploadImage(
     'image/heif-sequence'
   ];
   const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/avi', 'video/mov'];
-  const isImage = allowedImageTypes.includes(file.type.toLowerCase()) || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
-  const isVideo = allowedVideoTypes.includes(file.type) || file.type.startsWith('video/');
+
+  // Check file extension first for HEIC/HEIF files (more reliable than MIME type)
+  const fileName = file.name.toLowerCase();
+  const isHEIC = fileName.endsWith('.heic') || fileName.endsWith('.heif');
+  const fileType = file.type ? file.type.toLowerCase() : '';
+
+  // Check if it's an image (including HEIC with empty MIME type)
+  const isImage = isHEIC || allowedImageTypes.includes(fileType) ||
+                  fileName.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+
+  // Check if it's a video
+  const isVideo = allowedVideoTypes.includes(fileType) ||
+                  file.type.startsWith('video/') ||
+                  fileName.match(/\.(mp4|mov|webm|avi)$/i);
 
   if (!isImage && !isVideo) {
     throw new Error('Invalid file type. Please upload an image (JPEG, PNG, WebP, GIF, HEIC) or video');
   }
 
-  // Validate file size
+  // Validate file size - INCREASED LIMITS
   const maxSize = (bucket === 'covers' || bucket === 'backgrounds')
-    ? 10 * 1024 * 1024 // 10MB for covers
-    : isVideo
-    ? 100 * 1024 * 1024 // 100MB for videos
-    : 5 * 1024 * 1024; // 5MB for other images
+    ? 20 * 1024 * 1024 // 20MB for covers and backgrounds
+    : (isVideo || fileName.match(/\.(mp4|mov|webm|avi)$/i))
+    ? 200 * 1024 * 1024 // 200MB for videos
+    : 20 * 1024 * 1024; // 20MB for all images (avatars, posts, products)
 
   if (file.size > maxSize) {
     throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);

@@ -399,7 +399,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                 <input
                   ref={coverInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   className="hidden"
                   onChange={handleCoverUpload}
                 />
@@ -433,7 +433,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                     <input
                       ref={avatarInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.heic,.heif"
                       className="hidden"
                       onChange={handleAvatarUpload}
                     />

@@ -312,7 +312,7 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         multiple
         onChange={handleImageSelect}
         className="hidden"

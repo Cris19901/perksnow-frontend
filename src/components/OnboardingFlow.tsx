@@ -518,7 +518,7 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   onChange={handleProfilePictureChange}
                   className="hidden"
                   id="profile-picture-input"
@@ -570,7 +570,7 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   onChange={handleBackgroundImageChange}
                   className="hidden"
                   id="background-image-input"

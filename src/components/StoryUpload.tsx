@@ -332,7 +332,7 @@ export function StoryUpload({ open, onOpenChange, onSuccess }: StoryUploadProps)
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/*"
+            accept="image/*,video/*,.heic,.heif"
             multiple
             onChange={handleFileSelect}
             className="hidden"
