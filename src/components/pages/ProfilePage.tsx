@@ -7,6 +7,7 @@ import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Post } from '../Post';
 import { ProductCard } from '../ProductCard';
+import { ActivityPost } from '../ActivityPost';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus, UserPlus, UserCheck, Loader2, BadgeCheck } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -29,6 +30,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -153,6 +155,35 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
       console.log('✅ ProfilePage: Products fetched:', productsData?.length || 0);
       setProducts(productsData || []);
 
+      // Fetch user's activities (profile/cover updates)
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from('activities')
+        .select(`
+          id,
+          user_id,
+          activity_type,
+          content,
+          image_url,
+          created_at,
+          users:user_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('user_id', targetUserId)
+        .in('activity_type', ['profile_update', 'cover_update'])
+        .eq('is_public', true)
+        .order('created_at', { ascending: false });
+
+      if (!activitiesError && activitiesData) {
+        console.log('✅ ProfilePage: Activities fetched:', activitiesData.length);
+        setActivities(activitiesData);
+      } else if (activitiesError) {
+        console.error('❌ ProfilePage: Error fetching activities:', activitiesError);
+      }
+
     } catch (error: any) {
       console.error('❌ ProfilePage: Error fetching profile data:', error);
       setError(error.message || 'Failed to load profile');
@@ -164,6 +195,23 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const formatTimestamp = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSecs < 60) return 'just now';
+    if (diffMins < 60) return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+    if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+    if (diffDays < 7) return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+
+    return date.toLocaleDateString();
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -570,28 +618,57 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
           </TabsList>
 
           <TabsContent value="posts" className="space-y-6">
-            {posts.length === 0 ? (
+            {posts.length === 0 && activities.length === 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
                 <p className="text-gray-600">No posts yet</p>
               </div>
             ) : (
-              posts.map((post) => (
-                <Post
-                  key={post.id}
-                  id={post.id}
-                  content={post.content || ''}
-                  image={post.image_url}
-                  likes={post.likes_count || 0}
-                  comments={post.comments_count || 0}
-                  shares={post.shares_count || 0}
-                  timestamp={post.created_at ? new Date(post.created_at).toLocaleDateString() : 'Just now'}
-                  author={{
-                    name: post.users?.full_name || post.users?.username || 'Unknown',
-                    username: post.users?.username || 'unknown',
-                    avatar: post.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`,
-                  }}
-                />
-              ))
+              <>
+                {/* Mix posts and activities, sorted by date */}
+                {[
+                  ...posts.map(post => ({ type: 'post' as const, data: post, created_at: post.created_at })),
+                  ...activities.map(activity => ({ type: 'activity' as const, data: activity, created_at: activity.created_at }))
+                ]
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map((item, index) => {
+                    if (item.type === 'post') {
+                      const post = item.data;
+                      return (
+                        <Post
+                          key={`post-${post.id}`}
+                          id={post.id}
+                          content={post.content || ''}
+                          image={post.image_url}
+                          likes={post.likes_count || 0}
+                          comments={post.comments_count || 0}
+                          shares={post.shares_count || 0}
+                          timestamp={post.created_at ? new Date(post.created_at).toLocaleDateString() : 'Just now'}
+                          author={{
+                            name: post.users?.full_name || post.users?.username || 'Unknown',
+                            username: post.users?.username || 'unknown',
+                            avatar: post.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`,
+                          }}
+                        />
+                      );
+                    } else {
+                      const activity = item.data;
+                      return (
+                        <ActivityPost
+                          key={`activity-${activity.id}`}
+                          user={{
+                            username: activity.users?.username || 'unknown',
+                            full_name: activity.users?.full_name || 'Unknown User',
+                            avatar_url: activity.users?.avatar_url || ''
+                          }}
+                          activity_type={activity.activity_type}
+                          content={activity.content}
+                          image_url={activity.image_url}
+                          timestamp={formatTimestamp(activity.created_at)}
+                        />
+                      );
+                    }
+                  })}
+              </>
             )}
           </TabsContent>
 
