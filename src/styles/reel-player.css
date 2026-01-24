@@ -1,0 +1,302 @@
+/* Reel Player Pro - Custom Styling for Professional Video Player */
+
+/* Import Plyr base styles */
+@import 'plyr-react/plyr.css';
+
+/* Brand color customization */
+.reel-player-pro {
+  --plyr-color-main: #9333ea; /* Purple brand color */
+  --plyr-video-background: #000000;
+  --plyr-menu-background: rgba(0, 0, 0, 0.9);
+  --plyr-menu-color: #ffffff;
+  --plyr-video-control-color: #ffffff;
+  --plyr-video-control-color-hover: #9333ea;
+  --plyr-video-control-background-hover: rgba(147, 51, 234, 0.1);
+  --plyr-range-fill-background: #9333ea;
+  --plyr-range-thumb-background: #ffffff;
+  --plyr-range-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Video container - full height for reels */
+.reel-player-pro .plyr {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.reel-player-pro .plyr__video-wrapper {
+  background: #000000;
+  height: 100%;
+}
+
+.reel-player-pro video {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* Controls customization - Instagram/TikTok style */
+.reel-player-pro .plyr__controls {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    transparent 100%
+  );
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  pointer-events: none;
+}
+
+/* Show controls on hover or touch */
+.reel-player-pro .plyr:hover .plyr__controls,
+.reel-player-pro .plyr.plyr--playing:hover .plyr__controls,
+.reel-player-pro .plyr--paused .plyr__controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Large play button in center */
+.reel-player-pro .plyr__control--overlaid {
+  background: rgba(147, 51, 234, 0.9);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.reel-player-pro .plyr__control--overlaid:hover {
+  background: rgba(147, 51, 234, 1);
+  transform: scale(1.1);
+}
+
+.reel-player-pro .plyr__control--overlaid svg {
+  width: 32px;
+  height: 32px;
+  margin-left: 4px; /* Optical centering for play icon */
+}
+
+/* Progress bar - sleeker design */
+.reel-player-pro .plyr__progress {
+  margin-bottom: 8px;
+}
+
+.reel-player-pro .plyr__progress input[type='range'] {
+  height: 4px;
+}
+
+.reel-player-pro .plyr__progress input[type='range']::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.reel-player-pro .plyr__progress input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Control buttons - more prominent */
+.reel-player-pro .plyr__controls__item {
+  margin: 0 4px;
+}
+
+.reel-player-pro .plyr__control {
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.reel-player-pro .plyr__control:hover {
+  background: rgba(147, 51, 234, 0.2);
+  transform: scale(1.05);
+}
+
+.reel-player-pro .plyr__control svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Time display - better visibility */
+.reel-player-pro .plyr__time {
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  padding: 0 8px;
+}
+
+/* Volume control - hide on mobile */
+@media (max-width: 768px) {
+  .reel-player-pro .plyr__volume {
+    display: none;
+  }
+}
+
+/* Fullscreen button - more prominent */
+.reel-player-pro .plyr__control[data-plyr='fullscreen'] {
+  background: rgba(147, 51, 234, 0.15);
+}
+
+/* Loading spinner customization */
+.reel-player-pro .plyr--loading .plyr__controls {
+  display: none;
+}
+
+/* Buffer progress - purple accent */
+.reel-player-pro .plyr__progress__buffer {
+  background: rgba(147, 51, 234, 0.3);
+}
+
+/* Tooltips - match brand */
+.reel-player-pro .plyr__tooltip {
+  background: rgba(147, 51, 234, 0.95);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Menu (quality/speed) - modern design */
+.reel-player-pro .plyr__menu__container {
+  background: rgba(0, 0, 0, 0.95);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.reel-player-pro .plyr__menu__container [role='menuitemradio'] {
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+.reel-player-pro .plyr__menu__container [role='menuitemradio']:hover {
+  background: rgba(147, 51, 234, 0.2);
+}
+
+.reel-player-pro .plyr__menu__container [role='menuitemradio'][aria-checked='true'] {
+  background: rgba(147, 51, 234, 0.3);
+  color: #9333ea;
+}
+
+/* Poster image (thumbnail) */
+.reel-player-pro .plyr__poster {
+  background-size: cover;
+  background-position: center;
+}
+
+/* Focus states - accessibility */
+.reel-player-pro .plyr__control:focus-visible {
+  outline: 2px solid #9333ea;
+  outline-offset: 2px;
+}
+
+/* Paused state overlay */
+.reel-player-pro .plyr--paused .plyr__control--overlaid {
+  opacity: 1;
+}
+
+.reel-player-pro .plyr--playing .plyr__control--overlaid {
+  opacity: 0;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .reel-player-pro .plyr__control--overlaid {
+    width: 64px;
+    height: 64px;
+  }
+
+  .reel-player-pro .plyr__control--overlaid svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .reel-player-pro .plyr__controls {
+    padding: 12px;
+  }
+
+  .reel-player-pro .plyr__time {
+    font-size: 11px;
+  }
+}
+
+/* Smooth transitions */
+.reel-player-pro * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hide native video controls completely */
+.reel-player-pro video::-webkit-media-controls {
+  display: none !important;
+}
+
+.reel-player-pro video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+/* Quality badge (optional enhancement) */
+.reel-player-pro .plyr__badge {
+  background: rgba(147, 51, 234, 0.9);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+/* Loading state enhancement */
+.reel-player-pro .plyr--loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(147, 51, 234, 0.3);
+  border-top-color: #9333ea;
+  border-radius: 50%;
+  animation: plyr-rotate 0.8s linear infinite;
+}
+
+@keyframes plyr-rotate {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* Error state */
+.reel-player-pro .plyr--error {
+  background: #1f2937;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reel-player-pro .plyr--error::after {
+  content: 'Video failed to load';
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+}
