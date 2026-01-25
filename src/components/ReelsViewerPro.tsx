@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { ReelComments } from './ReelComments';
-import { Sheet, SheetContent } from './ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { ReelPlayerDirect } from './ReelPlayerDirect';
 
 interface Reel {
@@ -39,13 +39,15 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   const [reels, setReels] = useState<Reel[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false); // Default unmuted
   const [showComments, setShowComments] = useState(openComments);
   const [isLiking, setIsLiking] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewTracked, setViewTracked] = useState<Set<string>>(new Set());
+  const viewTrackingRef = useRef<Set<string>>(new Set());
   const isTransitioning = useRef(false);
   const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentPlayerRef = useRef<any>(null);
 
   useEffect(() => {
     fetchReels();
@@ -264,6 +266,7 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   // Handle touch swipe for mobile
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStart(e.targetTouches[0].clientY);
@@ -325,9 +328,19 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   // Track view after 3 seconds of watching
   const handleTimeUpdate = (currentTime: number, duration: number) => {
     const currentReel = reels[currentIndex];
-    if (currentTime >= 3 && !viewTracked.has(currentReel.reel_id)) {
-      trackView(currentReel.reel_id);
+    if (currentTime >= 3 && !viewTrackingRef.current.has(currentReel.reel_id)) {
+      // Immediately mark as tracked in ref to prevent duplicate calls
+      viewTrackingRef.current.add(currentReel.reel_id);
       setViewTracked(prev => new Set(prev).add(currentReel.reel_id));
+      trackView(currentReel.reel_id);
+    }
+  };
+
+  // Toggle play/pause when clicking video area
+  const handleVideoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentPlayerRef.current) {
+      currentPlayerRef.current.togglePlay();
     }
   };
 
@@ -367,35 +380,45 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="fixed inset-0 bg-black z-50 overflow-hidden"
+        className="fixed inset-0 bg-black z-[60] overflow-hidden"
         style={{ touchAction: 'none' }}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-colors"
+        {/* Video Player - Background Layer */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          onClick={handleVideoClick}
         >
-          <X className="w-6 h-6" />
-        </button>
-
-        {/* Video Player */}
-        <div className="relative w-full h-full flex items-center justify-center">
           <ReelPlayerDirect
             key={currentReel.reel_id}
             videoUrl={currentReel.video_url}
             muted={muted}
             onTimeUpdate={handleTimeUpdate}
+            onPlayerReady={(player) => {
+              currentPlayerRef.current = player;
+            }}
           />
+        </div>
 
-          {/* Overlay Content */}
-          <div className="absolute inset-0 pointer-events-none">
+        {/* Close Button - Interactive Layer */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute top-4 right-4 z-[90] bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        {/* Overlay Content - Non-interactive Info */}
+        <div className="absolute inset-0 pointer-events-none z-[70]">
             {/* Top Header */}
-            <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/60 to-transparent">
+            <div className="absolute top-0 left-0 right-0 p-4 pt-16 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
               <h1 className="text-white text-xl font-bold">Reels</h1>
             </div>
 
             {/* Bottom Info */}
-            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+            <div className="absolute bottom-0 left-0 right-0 p-6 pb-24 md:pb-6 mb-16 md:mb-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none">
               {/* User Info */}
               <div
                 className="flex items-center gap-3 mb-3 cursor-pointer pointer-events-auto"
@@ -427,71 +450,6 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
               </div>
             </div>
 
-            {/* Action Buttons - Right Side */}
-            <div className="absolute right-4 bottom-24 flex flex-col gap-6 pointer-events-auto">
-              {/* Like Button */}
-              <button
-                onClick={handleLike}
-                disabled={isLiking}
-                className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
-              >
-                <div
-                  className={`rounded-full p-3 ${
-                    currentReel.is_liked
-                      ? 'bg-purple-600'
-                      : 'bg-black/40 hover:bg-black/60'
-                  }`}
-                >
-                  <Heart
-                    className={`w-6 h-6 ${
-                      currentReel.is_liked ? 'fill-white text-white' : 'text-white'
-                    }`}
-                  />
-                </div>
-                <span className="text-white text-xs font-semibold">
-                  {formatCount(currentReel.likes_count)}
-                </span>
-              </button>
-
-              {/* Comment Button */}
-              <button
-                onClick={() => setShowComments(true)}
-                className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
-              >
-                <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
-                  <MessageCircle className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-white text-xs font-semibold">
-                  {formatCount(currentReel.comments_count)}
-                </span>
-              </button>
-
-              {/* Share Button */}
-              <button
-                onClick={() => handleShare(currentReel)}
-                className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
-              >
-                <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
-                  <Share2 className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-white text-xs font-semibold">Share</span>
-              </button>
-
-              {/* Mute Toggle */}
-              <button
-                onClick={() => setMuted(!muted)}
-                className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
-              >
-                <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
-                  {muted ? (
-                    <VolumeX className="w-6 h-6 text-white" />
-                  ) : (
-                    <Volume2 className="w-6 h-6 text-white" />
-                  )}
-                </div>
-              </button>
-            </div>
-
             {/* Progress Indicators - Right Side */}
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
               {reels.map((_, index) => (
@@ -508,12 +466,123 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
               ))}
             </div>
           </div>
+
+        {/* Action Buttons - Right Side - Interactive Layer */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 md:bottom-24 md:top-auto md:translate-y-0 flex flex-col gap-6 z-[90]">
+          {/* Like Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleLike();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            disabled={isLiking}
+            className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
+          >
+            <div
+              className={`rounded-full p-3 flex items-center justify-center min-w-[48px] min-h-[48px] ${
+                currentReel.is_liked
+                  ? 'bg-purple-600'
+                  : 'bg-black/40 hover:bg-black/60'
+              }`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill={currentReel.is_liked ? 'white' : 'none'}
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </div>
+            <span className="text-white text-xs font-semibold">
+              {formatCount(currentReel.likes_count)}
+            </span>
+          </button>
+
+          {/* Comment Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowComments(true);
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
+          >
+            <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
+              <MessageCircle className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white text-xs font-semibold">
+              {formatCount(currentReel.comments_count)}
+            </span>
+          </button>
+
+          {/* Share Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleShare(currentReel);
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
+          >
+            <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
+              <Share2 className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-white text-xs font-semibold">Share</span>
+          </button>
+
+          {/* Mute Toggle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMuted(prev => !prev);
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            className="flex flex-col items-center gap-1 transition-transform hover:scale-110"
+          >
+            <div className="rounded-full p-3 bg-black/40 hover:bg-black/60">
+              {muted ? (
+                <VolumeX className="w-6 h-6 text-white" />
+              ) : (
+                <Volume2 className="w-6 h-6 text-white" />
+              )}
+            </div>
+          </button>
         </div>
       </div>
 
       {/* Comments Sheet */}
       <Sheet open={showComments} onOpenChange={setShowComments}>
         <SheetContent side="bottom" className="h-[80vh] p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Comments</SheetTitle>
+          </SheetHeader>
           <ReelComments
             reelId={currentReel.reel_id}
             onClose={() => setShowComments(false)}

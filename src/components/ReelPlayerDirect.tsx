@@ -6,9 +6,10 @@ interface ReelPlayerDirectProps {
   videoUrl: string;
   muted?: boolean;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
+  onPlayerReady?: (player: Plyr) => void;
 }
 
-export function ReelPlayerDirect({ videoUrl, muted = true, onTimeUpdate }: ReelPlayerDirectProps) {
+export function ReelPlayerDirect({ videoUrl, muted = false, onTimeUpdate, onPlayerReady }: ReelPlayerDirectProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Plyr | null>(null);
 
@@ -31,7 +32,7 @@ export function ReelPlayerDirect({ videoUrl, muted = true, onTimeUpdate }: ReelP
         controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
         autoplay: true,
         muted: muted,
-        clickToPlay: true,
+        clickToPlay: false, // Disabled to prevent overlay buttons from triggering play/pause
         hideControls: true,
         fullscreen: {
           enabled: true,
@@ -42,17 +43,22 @@ export function ReelPlayerDirect({ videoUrl, muted = true, onTimeUpdate }: ReelP
 
       playerRef.current = player;
       console.log('✅ Plyr initialized successfully:', player);
+
+      // Notify parent that player is ready
+      if (onPlayerReady) {
+        onPlayerReady(player);
+      }
+
+      // Event listeners
+      player.on('timeupdate', () => {
+        if (onTimeUpdate) {
+          onTimeUpdate(player.currentTime, player.duration);
+        }
+      });
     } catch (error) {
       console.error('❌ Error initializing Plyr:', error);
       return;
     }
-
-    // Event listeners
-    player.on('timeupdate', () => {
-      if (onTimeUpdate) {
-        onTimeUpdate(player.currentTime, player.duration);
-      }
-    });
 
     // Cleanup
     return () => {
