@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Image, Video, X, Loader2, MapPin, Smile } from 'lucide-react';
+import { Image, Video, X, Loader2, MapPin, Smile, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { convertFilesIfNeeded } from '@/lib/heic-converter';
+import { useDailyLimits } from '@/hooks/useDailyLimits';
 import {
   Popover,
   PopoverContent,
@@ -43,6 +44,7 @@ const FEELINGS = [
 
 export function CreatePost({ onPostCreated }: CreatePostProps) {
   const { user } = useAuth();
+  const { limits, checkCanPost, incrementPostCount } = useDailyLimits();
   const [postText, setPostText] = useState('');
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -130,6 +132,14 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
     if (!postText.trim() && uploadedImages.length === 0) {
       setError('Please enter some text or upload images');
+      return;
+    }
+
+    // Check daily post limit
+    const canPost = await checkCanPost();
+    if (!canPost) {
+      setError(`You've reached your daily post limit (${limits.posts_limit} posts). Upgrade your subscription for more posts!`);
+      toast.error(`Daily post limit reached (${limits.posts_used}/${limits.posts_limit})`);
       return;
     }
 
@@ -227,6 +237,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       // Cleanup preview URLs
       uploadedImages.forEach(img => URL.revokeObjectURL(img.preview));
 
+      // Increment the daily post count
+      await incrementPostCount();
+
       // Reset form
       setPostText('');
       setUploadedImages([]);
@@ -235,7 +248,7 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       setFeeling(null);
       setShowLocationInput(false);
 
-      toast.success('Post created successfully!');
+      toast.success(`Post created! (${limits.posts_used + 1}/${limits.posts_limit} posts today)`);
 
       // Notify parent component
       if (onPostCreated) {
@@ -257,6 +270,19 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+      {/* Daily Limit Warning */}
+      {!limits.can_post && (
+        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-yellow-800">Daily post limit reached</p>
+            <p className="text-xs text-yellow-700 mt-0.5">
+              You've used all {limits.posts_limit} posts for today. Upgrade your subscription for more posts!
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 sm:gap-3">
         <Avatar className="w-8 h-8 sm:w-10 sm:h-10">
           <AvatarImage src={getAvatarUrl()} />
@@ -264,12 +290,12 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         </Avatar>
         <div className="flex-1">
           <Textarea
-            placeholder="What's on your mind?"
+            placeholder={limits.can_post ? "What's on your mind?" : "Post limit reached for today"}
             className="resize-none border-none focus-visible:ring-0 p-0 text-sm sm:text-base"
             rows={3}
             value={postText}
             onChange={(e) => setPostText(e.target.value)}
-            disabled={posting}
+            disabled={posting || !limits.can_post}
           />
 
           {/* Images Preview Grid */}
@@ -472,20 +498,27 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
             </PopoverContent>
           </Popover>
         </div>
-        <Button
-          className="bg-gradient-to-r from-purple-600 to-pink-600 h-8 sm:h-9 px-4 sm:px-6 text-sm sm:text-base"
-          onClick={handlePost}
-          disabled={posting || uploading || (!postText.trim() && uploadedImages.length === 0)}
-        >
-          {posting ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Posting...
-            </>
-          ) : (
-            'Post'
+        <div className="flex items-center gap-2">
+          {limits.posts_limit > 0 && (
+            <span className="text-xs text-gray-500">
+              {limits.posts_remaining}/{limits.posts_limit} left
+            </span>
           )}
-        </Button>
+          <Button
+            className="bg-gradient-to-r from-purple-600 to-pink-600 h-8 sm:h-9 px-4 sm:px-6 text-sm sm:text-base"
+            onClick={handlePost}
+            disabled={posting || uploading || (!postText.trim() && uploadedImages.length === 0) || !limits.can_post}
+          >
+            {posting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Posting...
+              </>
+            ) : (
+              'Post'
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

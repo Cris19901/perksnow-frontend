@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { Send, Loader2, MoreVertical, Trash2, Edit2, MessageCircle } from 'lucide-react';
+import { Send, Loader2, MoreVertical, Trash2, Edit2, MessageCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useDailyLimits } from '@/hooks/useDailyLimits';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ interface PostCommentsProps {
 
 export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsProps) {
   const { user } = useAuth();
+  const { limits, checkCanComment, incrementCommentCount } = useDailyLimits();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -117,6 +119,13 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
       return;
     }
 
+    // Check daily comment limit
+    const canComment = await checkCanComment();
+    if (!canComment) {
+      toast.error(`Daily comment limit reached (${limits.comments_used}/${limits.comments_limit})`);
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -128,8 +137,11 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
 
       if (error) throw error;
 
+      // Increment comment count
+      await incrementCommentCount();
+
       setNewComment('');
-      toast.success('Comment added');
+      toast.success(`Comment added (${limits.comments_used + 1}/${limits.comments_limit} today)`);
       onCommentAdded?.();
       fetchComments();
     } catch (err: any) {
@@ -156,6 +168,13 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
       return;
     }
 
+    // Check daily comment limit (replies count as comments)
+    const canComment = await checkCanComment();
+    if (!canComment) {
+      toast.error(`Daily comment limit reached (${limits.comments_used}/${limits.comments_limit})`);
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -168,9 +187,12 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
 
       if (error) throw error;
 
+      // Increment comment count
+      await incrementCommentCount();
+
       setReplyContent('');
       setReplyingTo(null);
-      toast.success('Reply added');
+      toast.success(`Reply added (${limits.comments_used + 1}/${limits.comments_limit} today)`);
       onCommentAdded?.();
 
       // Refresh the replies for this comment
@@ -468,41 +490,62 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
       {/* Add Comment Input */}
       <div className="border-t border-gray-200 p-4">
         {user ? (
-          <div className="flex gap-3">
-            <Avatar className="w-8 h-8 flex-shrink-0">
-              <AvatarImage src={user.user_metadata?.avatar_url} />
-              <AvatarFallback>
-                {(user.user_metadata?.full_name || user.email || 'U')[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <Textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write a comment..."
-                className="min-h-[80px] resize-none"
-                maxLength={2000}
-              />
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-xs text-gray-500">
-                  {newComment.length}/2000
-                </span>
-                <Button
-                  onClick={handleSubmitComment}
-                  disabled={submitting || !newComment.trim()}
-                  size="sm"
-                  className="gap-2"
-                >
-                  {submitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                  Comment
-                </Button>
+          <>
+            {/* Comment Limit Warning */}
+            {!limits.can_comment && (
+              <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">Daily comment limit reached</p>
+                  <p className="text-xs text-yellow-700 mt-0.5">
+                    You've used all {limits.comments_limit} comments for today. Upgrade for more!
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <Avatar className="w-8 h-8 flex-shrink-0">
+                <AvatarImage src={user.user_metadata?.avatar_url} />
+                <AvatarFallback>
+                  {(user.user_metadata?.full_name || user.email || 'U')[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <Textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={limits.can_comment ? "Write a comment..." : "Comment limit reached for today"}
+                  className="min-h-[80px] resize-none"
+                  maxLength={2000}
+                  disabled={!limits.can_comment}
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">
+                      {newComment.length}/2000
+                    </span>
+                    <span className="text-xs text-gray-400">•</span>
+                    <span className="text-xs text-gray-500">
+                      {limits.comments_remaining}/{limits.comments_limit} comments left
+                    </span>
+                  </div>
+                  <Button
+                    onClick={handleSubmitComment}
+                    disabled={submitting || !newComment.trim() || !limits.can_comment}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {submitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    Comment
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          </>
         ) : (
           <div className="text-center py-4 text-gray-500">
             <p className="text-sm">Please log in to comment</p>

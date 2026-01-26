@@ -43,7 +43,12 @@
       "Bash(supabase functions logs:*)",
       "Bash(scoop which:*)",
       "Bash(move \"c:\\\\Users\\\\FADIPE TIMOTHY\\\\OneDrive\\\\Documents\\\\perknowv2-latest\\\\supabase\\\\migrations\\\\001_feature_flags.sql\" \"c:\\\\Users\\\\FADIPE TIMOTHY\\\\OneDrive\\\\Documents\\\\perknowv2-latest\\\\supabase\\\\migrations\\\\archive\"\" && move \"c:UsersFADIPE TIMOTHYOneDriveDocumentsperknowv2-latestsupabasemigrations001_feature_flags_rollback.sql\" \"c:UsersFADIPE TIMOTHYOneDriveDocumentsperknowv2-latestsupabasemigrationsarchive\"\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(cd:*)",
+      "Bash(git rm:*)",
+      "Bash(timeout 5 tail:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

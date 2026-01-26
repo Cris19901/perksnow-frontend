@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { CheckCircle2, Crown, Loader2 } from 'lucide-react';
+import { CheckCircle2, Crown, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SubscriptionPlan {
@@ -28,11 +29,11 @@ interface UserSubscription {
 
 export default function SubscriptionPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   useEffect(() => {
     loadPlansAndSubscription();
@@ -89,7 +90,7 @@ export default function SubscriptionPage() {
     try {
       setSubscribing(planId);
 
-      // Create subscription record
+      const selectedPlan = plans.find(p => p.id === planId);
       const { data: subscription, error: subError } = await supabase
         .from('subscriptions')
         .insert({
@@ -97,8 +98,8 @@ export default function SubscriptionPage() {
           plan_id: planId,
           plan_name: planName,
           status: 'pending',
-          billing_cycle: billingCycle,
-          amount: plans.find(p => p.id === planId)?.[billingCycle === 'yearly' ? 'price_yearly' : 'price_monthly'] || 0,
+          billing_cycle: 'monthly',
+          amount: selectedPlan?.price_monthly || 0,
           currency: 'NGN',
           payment_provider: 'paystack',
           payment_status: 'pending',
@@ -108,11 +109,9 @@ export default function SubscriptionPage() {
 
       if (subError) throw subError;
 
-      // Generate payment reference
       const reference = `SUB_${planName.toUpperCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-      // Create payment transaction
-      const { data: transaction, error: txError } = await supabase
+      const { error: txError } = await supabase
         .from('payment_transactions')
         .insert({
           user_id: user.id,
@@ -122,23 +121,18 @@ export default function SubscriptionPage() {
           amount: subscription.amount,
           currency: 'NGN',
           status: 'pending',
-        })
-        .select()
-        .single();
+        });
 
       if (txError) throw txError;
 
-      // Update subscription with payment reference
       await supabase
         .from('subscriptions')
         .update({ payment_reference: reference })
         .eq('id', subscription.id);
 
-      // Get user email
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const email = authUser?.email || '';
 
-      // Initialize Paystack payment via Supabase Edge Function
       const { data: paystackData, error: paystackError } = await supabase.functions.invoke(
         'paystack-initialize',
         {
@@ -150,7 +144,7 @@ export default function SubscriptionPage() {
             metadata: {
               subscription_id: subscription.id,
               plan_name: planName,
-              billing_cycle: billingCycle,
+              billing_cycle: 'monthly',
               user_id: user.id,
             },
           },
@@ -165,7 +159,6 @@ export default function SubscriptionPage() {
         throw new Error(paystackData?.message || 'Payment initialization failed');
       }
 
-      // Redirect to Paystack payment page
       window.location.href = paystackData.data.authorization_url;
     } catch (error: any) {
       console.error('Subscription error:', error);
@@ -185,23 +178,32 @@ export default function SubscriptionPage() {
   const getPlanFeatures = (plan: SubscriptionPlan) => {
     const features = [];
 
+    if (plan.limits.duration_days && plan.name !== 'free') {
+      features.push(`${plan.limits.duration_days} days access`);
+    }
+
     if (plan.limits.max_posts_per_day) {
       features.push(`${plan.limits.max_posts_per_day} posts per day`);
     }
-    if (plan.limits.max_reels_per_day) {
-      features.push(`${plan.limits.max_reels_per_day} reels per day`);
+
+    if (plan.limits.max_comments_per_day) {
+      features.push(`${plan.limits.max_comments_per_day} comments per day`);
     }
-    if (plan.limits.can_withdraw) {
+
+    if (plan.limits.unlimited_likes) {
+      features.push('Unlimited likes');
+    }
+
+    if (plan.features.can_withdraw) {
       features.push('Withdraw earnings');
     }
-    if (plan.limits.verified_badge) {
+
+    if (plan.features.verified_badge) {
       features.push('Verified badge');
     }
+
     if (plan.features.priority_support) {
       features.push('Priority support');
-    }
-    if (plan.features.ad_free) {
-      features.push('Ad-free experience');
     }
 
     return features;
@@ -210,56 +212,38 @@ export default function SubscriptionPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="text-center mb-12">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-4xl font-bold flex-1">Choose Your Plan</h1>
           <Button
             variant="outline"
-            onClick={() => navigate('/subscription/history')}
+            onClick={() => navigate('/payment/history')}
             className="hidden md:flex"
           >
             Payment History
           </Button>
         </div>
         <p className="text-gray-600 dark:text-gray-400 text-lg mb-6">
-          Upgrade to Pro to unlock withdrawals and premium features
+          Upgrade to unlock more posts, comments, and withdrawal access
         </p>
 
-        {/* Billing Cycle Toggle */}
-        <div className="flex justify-center gap-4 mb-8">
-          <Button
-            variant={billingCycle === 'monthly' ? 'default' : 'outline'}
-            onClick={() => setBillingCycle('monthly')}
-          >
-            Monthly
-          </Button>
-          <Button
-            variant={billingCycle === 'yearly' ? 'default' : 'outline'}
-            onClick={() => setBillingCycle('yearly')}
-          >
-            Yearly
-            <Badge variant="secondary" className="ml-2">Save 16%</Badge>
-          </Button>
-        </div>
-
-        {/* Current Subscription Status */}
         {userSubscription && (
           <div className="mb-8">
-            <Badge variant={userSubscription.tier === 'pro' ? 'default' : 'secondary'} className="text-lg px-4 py-2">
-              Current Plan: {userSubscription.tier === 'pro' ? 'Pro' : 'Free'}
+            <Badge variant={userSubscription.tier !== 'free' ? 'default' : 'secondary'} className="text-lg px-4 py-2">
+              Current Plan: {userSubscription.tier === 'free' ? 'Free' : userSubscription.tier.charAt(0).toUpperCase() + userSubscription.tier.slice(1)}
             </Badge>
-            {userSubscription.expires_at && (
+            {userSubscription.expires_at && userSubscription.tier !== 'free' && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                 {userSubscription.status === 'active'
-                  ? `Renews on ${new Date(userSubscription.expires_at).toLocaleDateString()}`
-                  : `Expires on ${new Date(userSubscription.expires_at).toLocaleDateString()}`
+                  ? `Expires on ${new Date(userSubscription.expires_at).toLocaleDateString()}`
+                  : `Expired on ${new Date(userSubscription.expires_at).toLocaleDateString()}`
                 }
               </p>
             )}
@@ -267,30 +251,37 @@ export default function SubscriptionPage() {
         )}
       </div>
 
-      {/* Subscription Plans */}
-      <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
         {plans.map((plan) => {
-          const price = billingCycle === 'yearly' ? plan.price_yearly : plan.price_monthly;
-          const monthlyEquivalent = billingCycle === 'yearly' ? plan.price_yearly / 12 : plan.price_monthly;
+          const price = plan.price_monthly;
           const features = getPlanFeatures(plan);
           const isCurrentPlan = userSubscription?.tier === plan.name;
           const isPro = plan.name === 'pro';
+          const isRecommended = plan.name === 'basic';
 
           return (
             <Card
               key={plan.id}
-              className={`relative ${isPro ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+              className={`relative ${isPro ? 'border-purple-500 border-2 shadow-lg' : ''} ${isRecommended ? 'border-blue-500 border-2' : ''}`}
             >
               {isPro && (
                 <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-blue-500 text-white px-4 py-1">
+                  <Badge className="bg-purple-600 text-white px-4 py-1">
                     <Crown className="w-4 h-4 mr-1 inline" />
-                    Most Popular
+                    Power User
+                  </Badge>
+                </div>
+              )}
+              {isRecommended && (
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <Badge className="bg-blue-500 text-white px-4 py-1">
+                    <Zap className="w-4 h-4 mr-1 inline" />
+                    Best Value
                   </Badge>
                 </div>
               )}
 
-              <CardHeader>
+              <CardHeader className={isPro || isRecommended ? 'pt-8' : ''}>
                 <CardTitle className="text-2xl flex items-center gap-2">
                   {plan.display_name}
                   {isCurrentPlan && <Badge variant="outline">Current</Badge>}
@@ -300,14 +291,14 @@ export default function SubscriptionPage() {
 
               <CardContent>
                 <div className="mb-6">
-                  <div className="text-4xl font-bold">
-                    {formatPrice(price)}
+                  <div className="text-3xl font-bold">
+                    {price === 0 ? 'Free' : formatPrice(price)}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {billingCycle === 'yearly' && (
-                      <span>{formatPrice(monthlyEquivalent)}/month</span>
+                    {plan.limits.duration_days && plan.name !== 'free' && (
+                      <span>{plan.limits.duration_days} days access</span>
                     )}
-                    {billingCycle === 'monthly' && <span>per month</span>}
+                    {plan.name === 'free' && <span>Forever free</span>}
                   </div>
                 </div>
 
@@ -324,11 +315,22 @@ export default function SubscriptionPage() {
               <CardFooter>
                 {plan.name === 'free' ? (
                   <Button variant="outline" className="w-full" disabled>
-                    Current Plan
+                    {isCurrentPlan ? 'Current Plan' : 'Default Plan'}
                   </Button>
                 ) : isCurrentPlan && userSubscription?.status === 'active' ? (
-                  <Button variant="outline" className="w-full" disabled>
-                    Current Plan
+                  <Button
+                    className="w-full"
+                    onClick={() => handleSubscribe(plan.id, plan.name)}
+                    disabled={subscribing === plan.id}
+                  >
+                    {subscribing === plan.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Extend Subscription'
+                    )}
                   </Button>
                 ) : (
                   <Button
@@ -342,9 +344,7 @@ export default function SubscriptionPage() {
                         Processing...
                       </>
                     ) : (
-                      <>
-                        {isCurrentPlan ? 'Resubscribe' : 'Subscribe Now'}
-                      </>
+                      'Subscribe Now'
                     )}
                   </Button>
                 )}
@@ -354,17 +354,27 @@ export default function SubscriptionPage() {
         })}
       </div>
 
-      {/* FAQs or Additional Info */}
       <div className="mt-16 max-w-2xl mx-auto">
         <h2 className="text-2xl font-bold mb-6 text-center">Frequently Asked Questions</h2>
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Can I cancel anytime?</CardTitle>
+              <CardTitle className="text-lg">How do subscriptions work?</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                Yes! You can cancel your subscription at any time. You'll retain access until the end of your billing period.
+                All subscriptions are one-time payments with fixed durations. Starter gives you 15 days, Basic and Pro give you 30 days of premium access.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">What happens when my subscription expires?</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 dark:text-gray-400">
+                When your subscription expires, you'll automatically return to the Free plan with 4 posts and 50 comments per day. You can resubscribe anytime.
               </p>
             </CardContent>
           </Card>
@@ -375,7 +385,7 @@ export default function SubscriptionPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                Only Pro subscribers can withdraw earnings. Minimum withdrawal amount is ₦5,000.
+                Only paid subscribers (Starter, Basic, Pro) can withdraw earnings. Minimum withdrawal amount is ₦5,000.
               </p>
             </CardContent>
           </Card>

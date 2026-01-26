@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Trash2, User } from 'lucide-react';
+import { Send, Trash2, User, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
+import { useDailyLimits } from '@/hooks/useDailyLimits';
 
 interface Comment {
   id: string;
@@ -29,6 +30,7 @@ interface ReelCommentsProps {
 
 export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsProps) {
   const { user } = useAuth();
+  const { limits, checkCanComment, incrementCommentCount } = useDailyLimits();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,13 @@ export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsPr
       return;
     }
 
+    // Check daily comment limit
+    const canComment = await checkCanComment();
+    if (!canComment) {
+      toast.error(`Daily comment limit reached (${limits.comments_used}/${limits.comments_limit})`);
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -108,6 +117,9 @@ export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsPr
         .single();
 
       if (error) throw error;
+
+      // Increment comment count
+      await incrementCommentCount();
 
       setComments(prev => [...prev, data]);
       setNewComment('');
@@ -231,27 +243,39 @@ export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsPr
       {/* Comment Input */}
       <div className="border-t border-gray-200 p-4">
         {user ? (
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              placeholder="Add a comment..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              disabled={submitting}
-              maxLength={500}
-              className="flex-1"
-            />
-            <Button
-              type="submit"
-              disabled={submitting || !newComment.trim()}
-              className="bg-gradient-to-r from-purple-600 to-pink-600"
-            >
-              {submitting ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </Button>
-          </form>
+          <>
+            {/* Comment Limit Warning */}
+            {!limits.can_comment && (
+              <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+                <p className="text-xs text-yellow-800">Daily limit reached ({limits.comments_limit} comments)</p>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <Input
+                placeholder={limits.can_comment ? "Add a comment..." : "Limit reached"}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                disabled={submitting || !limits.can_comment}
+                maxLength={500}
+                className="flex-1"
+              />
+              <Button
+                type="submit"
+                disabled={submitting || !newComment.trim() || !limits.can_comment}
+                className="bg-gradient-to-r from-purple-600 to-pink-600"
+              >
+                {submitting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </form>
+            <p className="text-xs text-gray-500 mt-1 text-right">
+              {limits.comments_remaining}/{limits.comments_limit} left today
+            </p>
+          </>
         ) : (
           <div className="text-center py-4">
             <p className="text-sm text-gray-500">

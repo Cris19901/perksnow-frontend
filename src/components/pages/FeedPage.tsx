@@ -6,7 +6,7 @@ import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
 import { ProductPost } from '../ProductPost';
 import { ReelPost } from '../ReelPost';
-import { ReelsViewer } from '../ReelsViewerV2';
+import { ReelsViewerPro } from '../ReelsViewerPro';
 import { ActivityPost } from '../ActivityPost';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
@@ -503,15 +503,15 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                 )}
                 {mixedFeed.map((item, index) => {
                   if (item.type === 'post') {
-                    return <Post key={`post-${item.data.id}`} {...item.data} />;
+                    return <Post key={`post-${item.data.id}-${index}`} {...item.data} />;
                   } else if (item.type === 'product') {
-                    return <ProductPost key={`product-${item.data.id}`} {...item.data} onAddToCart={onAddToCart} />;
+                    return <ProductPost key={`product-${item.data.id}-${index}`} {...item.data} onAddToCart={onAddToCart} />;
                   } else if (item.type === 'reel') {
-                    return <ReelPost key={`reel-${item.data.reel_id}`} {...item.data} onReelClick={handleReelClick} />;
+                    return <ReelPost key={`reel-${item.data.reel_id}-${index}`} {...item.data} onReelClick={handleReelClick} />;
                   } else if (item.type === 'activity') {
                     return (
                       <ActivityPost
-                        key={`activity-${item.data.id}`}
+                        key={`activity-${item.data.id}-${index}`}
                         id={item.data.id}
                         user_id={item.data.user_id}
                         user={{
@@ -564,7 +564,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
       {/* Reels Viewer */}
       {showReelsViewer && (
-        <ReelsViewer
+        <ReelsViewerPro
           initialReelId={selectedReelId}
           openComments={openReelComments}
           onClose={() => {
