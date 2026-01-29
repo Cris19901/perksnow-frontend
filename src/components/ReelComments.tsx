@@ -273,7 +273,7 @@ export function ReelComments({ reelId, onClose, onCommentAdded }: ReelCommentsPr
               </Button>
             </form>
             <p className="text-xs text-gray-500 mt-1 text-right">
-              {limits.comments_remaining}/{limits.comments_limit} left today
+              {limits.comments_used}/{limits.comments_limit} comments used today
             </p>
           </>
         ) : (

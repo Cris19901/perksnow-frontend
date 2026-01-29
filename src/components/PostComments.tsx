@@ -526,7 +526,7 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
                     </span>
                     <span className="text-xs text-gray-400">•</span>
                     <span className="text-xs text-gray-500">
-                      {limits.comments_remaining}/{limits.comments_limit} comments left
+                      {limits.comments_used}/{limits.comments_limit} comments used
                     </span>
                   </div>
                   <Button

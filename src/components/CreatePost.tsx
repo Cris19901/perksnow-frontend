@@ -501,7 +501,7 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         <div className="flex items-center gap-2">
           {limits.posts_limit > 0 && (
             <span className="text-xs text-gray-500">
-              {limits.posts_remaining}/{limits.posts_limit} left
+              {limits.posts_used}/{limits.posts_limit} posts used
             </span>
           )}
           <Button
