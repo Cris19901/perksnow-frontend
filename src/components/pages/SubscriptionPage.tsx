@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { CheckCircle2, Crown, Loader2, Zap, X, BadgeCheck } from 'lucide-react';
+import { CheckCircle2, Crown, Loader2, Zap, X, BadgeCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SubscriptionPlan {
@@ -43,7 +43,6 @@ export default function SubscriptionPage() {
     try {
       setLoading(true);
 
-      // Load subscription plans (excluding inactive ones like starter)
       const { data: plansData, error: plansError } = await supabase
         .from('subscription_plans')
         .select('*')
@@ -53,7 +52,6 @@ export default function SubscriptionPage() {
       if (plansError) throw plansError;
       setPlans(plansData || []);
 
-      // Load user's subscription if logged in
       if (user) {
         const { data: userData, error: userError } = await supabase
           .from('users')
@@ -175,6 +173,148 @@ export default function SubscriptionPage() {
     }).format(price);
   };
 
+  const renderPlanCard = (plan: SubscriptionPlan) => {
+    const isCurrentPlan = userSubscription?.tier === plan.name;
+    const isPro = plan.name === 'pro';
+    const isBasic = plan.name === 'basic';
+    const isDaily = plan.name === 'daily';
+
+    return (
+      <Card
+        key={plan.id}
+        className={`relative ${isPro ? 'border-purple-500 border-2 shadow-lg' : ''} ${isBasic ? 'border-blue-500 border-2' : ''}`}
+      >
+        {isPro && (
+          <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+            <Badge className="bg-purple-600 text-white px-3 py-1 text-xs">
+              <Crown className="w-3 h-3 mr-1 inline" />
+              Power User
+            </Badge>
+          </div>
+        )}
+        {isBasic && (
+          <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+            <Badge className="bg-blue-500 text-white px-3 py-1 text-xs">
+              <Zap className="w-3 h-3 mr-1 inline" />
+              Best Value
+            </Badge>
+          </div>
+        )}
+        {isDaily && (
+          <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+            <Badge className="bg-green-500 text-white px-3 py-1 text-xs">
+              <Clock className="w-3 h-3 mr-1 inline" />
+              Quick Access
+            </Badge>
+          </div>
+        )}
+
+        <CardHeader className={isPro || isBasic || isDaily ? 'pt-8' : ''}>
+          <CardTitle className="text-xl flex items-center gap-2">
+            {plan.display_name}
+            {isCurrentPlan && <Badge variant="outline" className="text-xs">Current</Badge>}
+          </CardTitle>
+          <CardDescription className="text-xs">{plan.description}</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <div className="mb-4">
+            <div className="text-2xl font-bold">
+              {plan.price_monthly === 0 ? 'Free' : formatPrice(plan.price_monthly)}
+            </div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">
+              {plan.name === 'free' && 'Forever free'}
+              {plan.limits.duration_days === 1 && '1 day access'}
+              {plan.limits.duration_days === 15 && '15 days access'}
+              {plan.limits.duration_days === 30 && '30 days access'}
+            </div>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <span>{plan.limits.max_posts_per_day} posts/day</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <span>{plan.limits.max_comments_per_day} comments/day</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <span>Unlimited likes</span>
+            </div>
+            {plan.features.can_withdraw ? (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span>Withdraw earnings</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <X className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-gray-500">No withdrawals</span>
+              </div>
+            )}
+            {plan.features.verified_badge ? (
+              <div className="flex items-center gap-2">
+                <BadgeCheck className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className="text-blue-600 font-medium">Verified badge</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <X className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-gray-500">No badge</span>
+              </div>
+            )}
+            {plan.features.priority_support && (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span>Priority support</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+
+        <CardFooter>
+          {plan.name === 'free' ? (
+            <Button variant="outline" className="w-full" disabled>
+              {isCurrentPlan ? 'Current Plan' : 'Default Plan'}
+            </Button>
+          ) : isCurrentPlan && userSubscription?.status === 'active' ? (
+            <Button
+              className="w-full"
+              onClick={() => handleSubscribe(plan.id, plan.name)}
+              disabled={subscribing === plan.id}
+            >
+              {subscribing === plan.id ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Extend'
+              )}
+            </Button>
+          ) : (
+            <Button
+              className={`w-full ${isPro ? 'bg-purple-600 hover:bg-purple-700' : ''} ${isBasic ? 'bg-blue-600 hover:bg-blue-700' : ''} ${isDaily ? 'bg-green-600 hover:bg-green-700' : ''}`}
+              onClick={() => handleSubscribe(plan.id, plan.name)}
+              disabled={subscribing === plan.id}
+            >
+              {subscribing === plan.id ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Subscribe'
+              )}
+            </Button>
+          )}
+        </CardFooter>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -183,14 +323,16 @@ export default function SubscriptionPage() {
     );
   }
 
-  // Get plan data for comparison table
+  // Get plans in order
   const freePlan = plans.find(p => p.name === 'free');
+  const dailyPlan = plans.find(p => p.name === 'daily');
+  const starterPlan = plans.find(p => p.name === 'starter');
   const basicPlan = plans.find(p => p.name === 'basic');
   const proPlan = plans.find(p => p.name === 'pro');
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="text-center mb-12">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="text-center mb-10">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-3xl md:text-4xl font-bold flex-1">Choose Your Plan</h1>
           <Button
@@ -206,7 +348,7 @@ export default function SubscriptionPage() {
         </p>
 
         {userSubscription && (
-          <div className="mb-8">
+          <div className="mb-6">
             <Badge variant={userSubscription.tier !== 'free' ? 'default' : 'secondary'} className="text-lg px-4 py-2">
               Current Plan: {userSubscription.tier === 'free' ? 'Free' : userSubscription.tier.charAt(0).toUpperCase() + userSubscription.tier.slice(1)}
             </Badge>
@@ -222,337 +364,104 @@ export default function SubscriptionPage() {
         )}
       </div>
 
-      {/* Subscription Cards */}
-      <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
-        {/* Free Plan */}
-        {freePlan && (
-          <Card className="relative">
-            <CardHeader>
-              <CardTitle className="text-2xl flex items-center gap-2">
-                {freePlan.display_name}
-                {userSubscription?.tier === 'free' && <Badge variant="outline">Current</Badge>}
-              </CardTitle>
-              <CardDescription>{freePlan.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-6">
-                <div className="text-3xl font-bold">Free</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Forever free</div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{freePlan.limits.max_posts_per_day} posts per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{freePlan.limits.max_comments_per_day} comments per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Unlimited likes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Earn points</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <X className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-500">No withdrawals</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <X className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-500">No verified badge</span>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full" disabled>
-                {userSubscription?.tier === 'free' ? 'Current Plan' : 'Default Plan'}
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* Basic Plan */}
-        {basicPlan && (
-          <Card className="relative border-blue-500 border-2">
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <Badge className="bg-blue-500 text-white px-4 py-1">
-                <Zap className="w-4 h-4 mr-1 inline" />
-                Best Value
-              </Badge>
-            </div>
-            <CardHeader className="pt-8">
-              <CardTitle className="text-2xl flex items-center gap-2">
-                {basicPlan.display_name}
-                {userSubscription?.tier === 'basic' && <Badge variant="outline">Current</Badge>}
-              </CardTitle>
-              <CardDescription>{basicPlan.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-6">
-                <div className="text-3xl font-bold">{formatPrice(basicPlan.price_monthly)}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {basicPlan.limits.duration_days} days access
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{basicPlan.limits.max_posts_per_day} posts per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{basicPlan.limits.max_comments_per_day} comments per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Unlimited likes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Earn points</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Withdraw earnings</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <X className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-500">No verified badge</span>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              {userSubscription?.tier === 'basic' && userSubscription?.status === 'active' ? (
-                <Button
-                  className="w-full"
-                  onClick={() => handleSubscribe(basicPlan.id, basicPlan.name)}
-                  disabled={subscribing === basicPlan.id}
-                >
-                  {subscribing === basicPlan.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Extend Subscription'
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  onClick={() => handleSubscribe(basicPlan.id, basicPlan.name)}
-                  disabled={subscribing === basicPlan.id}
-                >
-                  {subscribing === basicPlan.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Subscribe Now'
-                  )}
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* Pro Plan */}
-        {proPlan && (
-          <Card className="relative border-purple-500 border-2 shadow-lg">
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <Badge className="bg-purple-600 text-white px-4 py-1">
-                <Crown className="w-4 h-4 mr-1 inline" />
-                Power User
-              </Badge>
-            </div>
-            <CardHeader className="pt-8">
-              <CardTitle className="text-2xl flex items-center gap-2">
-                {proPlan.display_name}
-                {userSubscription?.tier === 'pro' && <Badge variant="outline">Current</Badge>}
-              </CardTitle>
-              <CardDescription>{proPlan.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-6">
-                <div className="text-3xl font-bold">{formatPrice(proPlan.price_monthly)}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {proPlan.limits.duration_days} days access
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{proPlan.limits.max_posts_per_day} posts per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{proPlan.limits.max_comments_per_day} comments per day</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Unlimited likes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Earn points</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Withdraw earnings</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <BadgeCheck className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-medium text-blue-600">Verified badge</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Priority support</span>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              {userSubscription?.tier === 'pro' && userSubscription?.status === 'active' ? (
-                <Button
-                  className="w-full"
-                  onClick={() => handleSubscribe(proPlan.id, proPlan.name)}
-                  disabled={subscribing === proPlan.id}
-                >
-                  {subscribing === proPlan.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Extend Subscription'
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                  onClick={() => handleSubscribe(proPlan.id, proPlan.name)}
-                  disabled={subscribing === proPlan.id}
-                >
-                  {subscribing === proPlan.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Subscribe Now'
-                  )}
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
-        )}
+      {/* Subscription Cards - 5 columns on large screens */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-16">
+        {freePlan && renderPlanCard(freePlan)}
+        {dailyPlan && renderPlanCard(dailyPlan)}
+        {starterPlan && renderPlanCard(starterPlan)}
+        {basicPlan && renderPlanCard(basicPlan)}
+        {proPlan && renderPlanCard(proPlan)}
       </div>
 
       {/* Feature Comparison Table */}
-      <div className="max-w-5xl mx-auto mb-16">
+      <div className="mb-16">
         <h2 className="text-2xl font-bold mb-6 text-center">Compare Plans</h2>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-4 px-4 font-semibold">Feature</th>
-                <th className="text-center py-4 px-4 font-semibold">Free</th>
-                <th className="text-center py-4 px-4 font-semibold bg-blue-50">Basic</th>
-                <th className="text-center py-4 px-4 font-semibold bg-purple-50">Pro</th>
+                <th className="text-left py-3 px-2 font-semibold">Feature</th>
+                <th className="text-center py-3 px-2 font-semibold">Free</th>
+                <th className="text-center py-3 px-2 font-semibold bg-green-50">Daily</th>
+                <th className="text-center py-3 px-2 font-semibold">Starter</th>
+                <th className="text-center py-3 px-2 font-semibold bg-blue-50">Basic</th>
+                <th className="text-center py-3 px-2 font-semibold bg-purple-50">Pro</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b">
-                <td className="py-4 px-4">Price</td>
-                <td className="text-center py-4 px-4">Free</td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">{formatPrice(3000)}</td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">{formatPrice(10000)}</td>
+                <td className="py-3 px-2">Price</td>
+                <td className="text-center py-3 px-2">Free</td>
+                <td className="text-center py-3 px-2 bg-green-50/50">{formatPrice(200)}</td>
+                <td className="text-center py-3 px-2">{formatPrice(2000)}</td>
+                <td className="text-center py-3 px-2 bg-blue-50/50">{formatPrice(3000)}</td>
+                <td className="text-center py-3 px-2 bg-purple-50/50">{formatPrice(10000)}</td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Duration</td>
-                <td className="text-center py-4 px-4">Forever</td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">30 days</td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">30 days</td>
+                <td className="py-3 px-2">Duration</td>
+                <td className="text-center py-3 px-2">Forever</td>
+                <td className="text-center py-3 px-2 bg-green-50/50">1 day</td>
+                <td className="text-center py-3 px-2">15 days</td>
+                <td className="text-center py-3 px-2 bg-blue-50/50">30 days</td>
+                <td className="text-center py-3 px-2 bg-purple-50/50">30 days</td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Posts per day</td>
-                <td className="text-center py-4 px-4">4</td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">20</td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">50</td>
+                <td className="py-3 px-2">Posts/day</td>
+                <td className="text-center py-3 px-2">4</td>
+                <td className="text-center py-3 px-2 bg-green-50/50">10</td>
+                <td className="text-center py-3 px-2">20</td>
+                <td className="text-center py-3 px-2 bg-blue-50/50">20</td>
+                <td className="text-center py-3 px-2 bg-purple-50/50">50</td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Comments per day</td>
-                <td className="text-center py-4 px-4">50</td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">50</td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">100</td>
+                <td className="py-3 px-2">Comments/day</td>
+                <td className="text-center py-3 px-2">50</td>
+                <td className="text-center py-3 px-2 bg-green-50/50">30</td>
+                <td className="text-center py-3 px-2">25</td>
+                <td className="text-center py-3 px-2 bg-blue-50/50">50</td>
+                <td className="text-center py-3 px-2 bg-purple-50/50">100</td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Likes</td>
-                <td className="text-center py-4 px-4">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
+                <td className="py-3 px-2">Unlimited Likes</td>
+                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Earn Points</td>
-                <td className="text-center py-4 px-4">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
+                <td className="py-3 px-2">Earn Points</td>
+                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Withdraw Earnings</td>
-                <td className="text-center py-4 px-4">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
+                <td className="py-3 px-2">Withdraw Earnings</td>
+                <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">
-                  <span className="flex items-center gap-2">
-                    Verified Badge
-                    <BadgeCheck className="w-4 h-4 text-blue-500" />
-                  </span>
+                <td className="py-3 px-2 flex items-center gap-1">
+                  Verified Badge <BadgeCheck className="w-3 h-3 text-blue-500" />
                 </td>
-                <td className="text-center py-4 px-4">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
+                <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-green-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-blue-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
               <tr className="border-b">
-                <td className="py-4 px-4">Priority Support</td>
-                <td className="text-center py-4 px-4">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-blue-50/50">
-                  <X className="w-5 h-5 text-gray-400 mx-auto" />
-                </td>
-                <td className="text-center py-4 px-4 bg-purple-50/50">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                </td>
+                <td className="py-3 px-2">Priority Support</td>
+                <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-green-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-blue-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
             </tbody>
           </table>
@@ -569,7 +478,7 @@ export default function SubscriptionPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                All subscriptions are one-time payments with fixed durations. Basic and Pro give you 30 days of premium access.
+                All subscriptions are one-time payments. Daily gives 1 day, Starter gives 15 days, Basic and Pro give 30 days of premium access.
               </p>
             </CardContent>
           </Card>
@@ -580,7 +489,7 @@ export default function SubscriptionPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                When your subscription expires, you'll automatically return to the Free plan with 4 posts and 50 comments per day. You can resubscribe anytime.
+                When your subscription expires, you'll return to the Free plan with 4 posts and 50 comments per day. You can resubscribe anytime.
               </p>
             </CardContent>
           </Card>
@@ -591,7 +500,7 @@ export default function SubscriptionPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                Only paid subscribers (Basic, Pro) can withdraw earnings. Minimum withdrawal amount is ₦5,000.
+                All paid subscribers (Daily, Starter, Basic, Pro) can withdraw earnings. Minimum withdrawal amount is ₦5,000.
               </p>
             </CardContent>
           </Card>
