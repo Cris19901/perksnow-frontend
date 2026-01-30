@@ -26,18 +26,22 @@ export default function PaymentHistoryPage() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [cartItemsCount] = useState(0);
 
   useEffect(() => {
     if (user) {
       fetchPaymentHistory();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
   const fetchPaymentHistory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      setError(null);
+      const { data, error: queryError } = await supabase
         .from('payment_transactions')
         .select(`
           id,
@@ -54,10 +58,11 @@ export default function PaymentHistoryPage() {
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (queryError) throw queryError;
       setTransactions(data || []);
-    } catch (error) {
-      console.error('Error fetching payment history:', error);
+    } catch (err: any) {
+      console.error('Error fetching payment history:', err);
+      setError(err.message || 'Failed to load payment history');
     } finally {
       setLoading(false);
     }
@@ -137,15 +142,47 @@ www.lavlay.com
             </p>
           </div>
 
+          {/* Not Authenticated State */}
+          {!user && !loading && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Receipt className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Sign in required</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Please sign in to view your payment history.
+                </p>
+                <Button onClick={() => navigate('/login')}>
+                  Sign In
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Loading State */}
-          {loading && (
+          {user && loading && (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
             </div>
           )}
 
+          {/* Error State */}
+          {user && !loading && error && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <XCircle className="w-16 h-16 mx-auto text-red-500 mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Error loading payment history</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  {error}
+                </p>
+                <Button onClick={fetchPaymentHistory} variant="outline">
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Empty State */}
-          {!loading && transactions.length === 0 && (
+          {user && !loading && !error && transactions.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
                 <Receipt className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -161,7 +198,7 @@ www.lavlay.com
           )}
 
           {/* Transaction List */}
-          {!loading && transactions.length > 0 && (
+          {user && !loading && !error && transactions.length > 0 && (
             <div className="space-y-4">
               {transactions.map((transaction) => (
                 <Card key={transaction.id}>
