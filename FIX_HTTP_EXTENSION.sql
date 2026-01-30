@@ -46,3 +46,5 @@ BEGIN
   RAISE NOTICE 'Permissions granted to all roles';
   RAISE NOTICE '========================================';
 END $$;
+
+

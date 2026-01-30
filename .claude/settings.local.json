@@ -48,7 +48,9 @@
       "Bash(git rm:*)",
       "Bash(timeout 5 tail:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(del fix-plans.mjs)",
+      "Bash(timeout 60 bash:*)"
     ],
     "deny": [],
     "ask": []

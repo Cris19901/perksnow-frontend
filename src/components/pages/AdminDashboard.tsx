@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface AdminDashboardProps {
   onNavigate?: (page: string) => void;
@@ -54,34 +55,27 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
     try {
       setLoading(true);
 
-      // Fetch total users
-      const { count: usersCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
+      // Use secure admin function to get all stats in one call
+      const { data: stats, error } = await supabase
+        .rpc('get_admin_dashboard_stats');
 
-      // Fetch total points in circulation
-      const { data: pointsData } = await supabase
-        .from('users')
-        .select('points_balance');
-
-      const totalPoints = pointsData?.reduce((sum, u) => sum + (u.points_balance || 0), 0) || 0;
-
-      // Fetch pending withdrawals
-      const { count: pendingCount } = await supabase
-        .from('withdrawal_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      // Fetch total withdrawals
-      const { count: totalCount } = await supabase
-        .from('withdrawal_requests')
-        .select('*', { count: 'exact', head: true });
+      if (error) {
+        // If user is not admin, they'll get an error here
+        if (error.message.includes('Only admins')) {
+          console.error('Access denied: Admin privileges required');
+          toast.error('Access denied. You need admin privileges.');
+          // Optionally redirect to home
+          // navigate('/');
+          return;
+        }
+        throw error;
+      }
 
       setStats({
-        totalUsers: usersCount || 0,
-        totalPoints,
-        pendingWithdrawals: pendingCount || 0,
-        totalWithdrawals: totalCount || 0
+        totalUsers: stats?.totalUsers || 0,
+        totalPoints: stats?.totalPoints || 0,
+        pendingWithdrawals: stats?.pendingWithdrawals || 0,
+        totalWithdrawals: stats?.totalWithdrawals || 0
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -90,12 +84,22 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
     }
   };
 
+  // Color mapping for proper Tailwind JIT compilation
+  const colorMap = {
+    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+    purple: { bg: 'bg-purple-100', text: 'text-purple-600' },
+    green: { bg: 'bg-green-100', text: 'text-green-600' },
+    pink: { bg: 'bg-pink-100', text: 'text-pink-600' },
+    red: { bg: 'bg-red-100', text: 'text-red-600' },
+    gray: { bg: 'bg-gray-100', text: 'text-gray-600' }
+  } as const;
+
   const adminPages = [
     {
       title: 'User Management',
       description: 'Manage users, subscriptions, and account status',
       icon: Users,
-      color: 'blue',
+      color: 'blue' as const,
       path: '/admin/users',
       stats: `${stats.totalUsers} users`
     },
@@ -103,7 +107,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Subscription Analytics',
       description: 'View subscription revenue, metrics, and performance',
       icon: TrendingUp,
-      color: 'purple',
+      color: 'purple' as const,
       path: '/admin/subscription-analytics',
       stats: 'Revenue tracking'
     },
@@ -111,7 +115,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Point Settings',
       description: 'Configure point values, limits, and conversion rates',
       icon: Zap,
-      color: 'purple',
+      color: 'purple' as const,
       path: '/admin/point-settings',
       stats: 'Manage rewards'
     },
@@ -119,7 +123,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Withdrawals',
       description: 'Review and approve user withdrawal requests',
       icon: DollarSign,
-      color: 'green',
+      color: 'green' as const,
       path: '/admin/withdrawals',
       stats: `${stats.pendingWithdrawals} pending`
     },
@@ -127,7 +131,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Referral Settings',
       description: 'Manage referral program rewards and bonuses',
       icon: UserPlus,
-      color: 'blue',
+      color: 'blue' as const,
       path: '/admin/referral-settings',
       stats: 'Referral system'
     },
@@ -135,7 +139,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Signup Bonus',
       description: 'Configure welcome bonus for new users',
       icon: Gift,
-      color: 'pink',
+      color: 'pink' as const,
       path: '/admin/signup-bonus',
       stats: 'Welcome rewards'
     },
@@ -143,7 +147,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'Content Moderation',
       description: 'Review and moderate user posts, reels, and comments',
       icon: Shield,
-      color: 'red',
+      color: 'red' as const,
       path: '/admin/moderation',
       stats: 'Manage content'
     },
@@ -151,7 +155,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       title: 'General Settings',
       description: 'Platform configuration and general settings',
       icon: Settings,
-      color: 'gray',
+      color: 'gray' as const,
       path: '/admin/settings',
       stats: 'Platform config'
     }
@@ -245,8 +249,8 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
                 onClick={() => navigate(page.path)}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className={`p-3 rounded-lg bg-${page.color}-100`}>
-                    <page.icon className={`w-6 h-6 text-${page.color}-600`} />
+                  <div className={`p-3 rounded-lg ${colorMap[page.color].bg}`}>
+                    <page.icon className={`w-6 h-6 ${colorMap[page.color].text}`} />
                   </div>
                   <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
                 </div>
