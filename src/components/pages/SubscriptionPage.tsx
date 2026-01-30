@@ -415,9 +415,9 @@ export default function SubscriptionPage() {
               </tr>
               <tr className="border-b">
                 <td className="py-3 px-2">Comments/day</td>
-                <td className="text-center py-3 px-2">50</td>
+                <td className="text-center py-3 px-2">20</td>
                 <td className="text-center py-3 px-2 bg-green-50/50">30</td>
-                <td className="text-center py-3 px-2">25</td>
+                <td className="text-center py-3 px-2">30</td>
                 <td className="text-center py-3 px-2 bg-blue-50/50">50</td>
                 <td className="text-center py-3 px-2 bg-purple-50/50">100</td>
               </tr>
