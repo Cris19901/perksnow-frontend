@@ -6,6 +6,16 @@ import { Button } from '../ui/button';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Input } from '../ui/input';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
+import {
   AlertCircle,
   ArrowLeft,
   Eye,
@@ -17,7 +27,9 @@ import {
   Video,
   ShoppingBag,
   Search,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -107,15 +119,41 @@ export default function AdminContentModerationPage({
   const [products, setProducts] = useState<Product[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 20;
+
+  // Delete confirmation dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    type: ContentType | null;
+    id: string | null;
+    title: string;
+  }>({ open: false, type: null, id: null, title: '' });
+
   useEffect(() => {
-    fetchContent();
+    setCurrentPage(1); // Reset page when changing tabs
+    fetchContent(1);
   }, [activeTab]);
 
-  const fetchContent = async () => {
+  useEffect(() => {
+    fetchContent(currentPage);
+  }, [currentPage]);
+
+  const fetchContent = async (page: number = 1) => {
     try {
       setLoading(true);
+      const from = (page - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
 
       if (activeTab === 'posts') {
+        // Get total count
+        const { count } = await supabase
+          .from('posts')
+          .select('*', { count: 'exact', head: true });
+        setTotalCount(count || 0);
+
         const { data, error } = await supabase
           .from('posts')
           .select(`
@@ -133,11 +171,16 @@ export default function AdminContentModerationPage({
             )
           `)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .range(from, to);
 
         if (error) throw error;
         setPosts(data || []);
       } else if (activeTab === 'reels') {
+        const { count } = await supabase
+          .from('reels')
+          .select('*', { count: 'exact', head: true });
+        setTotalCount(count || 0);
+
         const { data, error } = await supabase
           .from('reels')
           .select(`
@@ -156,11 +199,16 @@ export default function AdminContentModerationPage({
             )
           `)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .range(from, to);
 
         if (error) throw error;
         setReels(data || []);
       } else if (activeTab === 'products') {
+        const { count } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true });
+        setTotalCount(count || 0);
+
         const { data, error } = await supabase
           .from('products')
           .select(`
@@ -180,11 +228,16 @@ export default function AdminContentModerationPage({
             )
           `)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .range(from, to);
 
         if (error) throw error;
         setProducts(data || []);
       } else if (activeTab === 'comments') {
+        const { count } = await supabase
+          .from('comments')
+          .select('*', { count: 'exact', head: true });
+        setTotalCount(count || 0);
+
         const { data, error } = await supabase
           .from('comments')
           .select(`
@@ -200,7 +253,7 @@ export default function AdminContentModerationPage({
             )
           `)
           .order('created_at', { ascending: false })
-          .limit(100);
+          .range(from, to);
 
         if (error) throw error;
         setComments(data || []);
@@ -213,89 +266,50 @@ export default function AdminContentModerationPage({
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
-      return;
-    }
+  // Open delete confirmation dialog
+  const openDeleteDialog = (type: ContentType, id: string, title: string) => {
+    setDeleteDialog({ open: true, type, id, title });
+  };
+
+  // Handle confirmed delete
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.type || !deleteDialog.id) return;
 
     try {
       const { error } = await supabase
-        .from('posts')
+        .from(deleteDialog.type)
         .delete()
-        .eq('id', postId);
+        .eq('id', deleteDialog.id);
 
       if (error) throw error;
 
-      toast.success('Post deleted successfully');
-      setPosts(posts.filter(p => p.id !== postId));
+      toast.success(`${deleteDialog.type.slice(0, -1)} deleted successfully`);
+
+      // Update local state
+      if (deleteDialog.type === 'posts') {
+        setPosts(posts.filter(p => p.id !== deleteDialog.id));
+      } else if (deleteDialog.type === 'reels') {
+        setReels(reels.filter(r => r.id !== deleteDialog.id));
+      } else if (deleteDialog.type === 'products') {
+        setProducts(products.filter(p => p.id !== deleteDialog.id));
+      } else if (deleteDialog.type === 'comments') {
+        setComments(comments.filter(c => c.id !== deleteDialog.id));
+      }
+
+      // Update total count
+      setTotalCount(prev => prev - 1);
     } catch (err: any) {
-      console.error('Error deleting post:', err);
-      toast.error('Failed to delete post');
+      console.error(`Error deleting ${deleteDialog.type}:`, err);
+      toast.error(`Failed to delete ${deleteDialog.type.slice(0, -1)}`);
+    } finally {
+      setDeleteDialog({ open: false, type: null, id: null, title: '' });
     }
   };
 
-  const handleDeleteReel = async (reelId: string) => {
-    if (!confirm('Are you sure you want to delete this reel? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('reels')
-        .delete()
-        .eq('id', reelId);
-
-      if (error) throw error;
-
-      toast.success('Reel deleted successfully');
-      setReels(reels.filter(r => r.id !== reelId));
-    } catch (err: any) {
-      console.error('Error deleting reel:', err);
-      toast.error('Failed to delete reel');
-    }
-  };
-
-  const handleDeleteProduct = async (productId: string) => {
-    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
-
-      if (error) throw error;
-
-      toast.success('Product deleted successfully');
-      setProducts(products.filter(p => p.id !== productId));
-    } catch (err: any) {
-      console.error('Error deleting product:', err);
-      toast.error('Failed to delete product');
-    }
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    if (!confirm('Are you sure you want to delete this comment? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('comments')
-        .delete()
-        .eq('id', commentId);
-
-      if (error) throw error;
-
-      toast.success('Comment deleted successfully');
-      setComments(comments.filter(c => c.id !== commentId));
-    } catch (err: any) {
-      console.error('Error deleting comment:', err);
-      toast.error('Failed to delete comment');
-    }
-  };
+  // Pagination helpers
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+  const canGoPrevious = currentPage > 1;
+  const canGoNext = currentPage < totalPages;
 
   const filteredPosts = posts.filter(post =>
     post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -417,7 +431,7 @@ export default function AdminContentModerationPage({
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleDeletePost(post.id)}
+                                onClick={() => openDeleteDialog('posts', post.id, 'post')}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -471,7 +485,7 @@ export default function AdminContentModerationPage({
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleDeleteReel(reel.id)}
+                                onClick={() => openDeleteDialog('reels', reel.id, 'reel')}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -523,7 +537,7 @@ export default function AdminContentModerationPage({
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleDeleteProduct(product.id)}
+                                onClick={() => openDeleteDialog('products', product.id, 'product')}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -582,7 +596,7 @@ export default function AdminContentModerationPage({
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleDeleteComment(comment.id)}
+                                onClick={() => openDeleteDialog('comments', comment.id, 'comment')}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -599,9 +613,62 @@ export default function AdminContentModerationPage({
                 )}
               </>
             )}
+
+            {/* Pagination */}
+            {totalCount > itemsPerPage && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    disabled={!canGoPrevious}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600 px-3">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!canGoNext}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, type: null, id: null, title: '' })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteDialog.title}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this {deleteDialog.title}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <MobileBottomNav currentPage="admin" onNavigate={onNavigate} />
     </div>
