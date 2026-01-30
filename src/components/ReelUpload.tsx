@@ -9,6 +9,7 @@ import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadImage } from '@/lib/image-upload-presigned';
+import { uploadVideo, generateVideoThumbnail } from '@/lib/video-upload-optimized';
 import { toast } from 'sonner';
 
 interface ReelUploadProps {
@@ -129,11 +130,11 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
 
     try {
       setUploading(true);
-      setUploadProgress(10);
+      setUploadProgress(5);
 
-      // Generate thumbnail
-      setUploadProgress(20);
-      const thumbnailBlob = await generateThumbnail();
+      // Generate thumbnail using optimized function
+      setUploadProgress(10);
+      const thumbnailBlob = await generateVideoThumbnail(videoFile, 1);
 
       // Convert thumbnail blob to File
       const thumbnailFile = new File(
@@ -142,16 +143,25 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
         { type: 'image/jpeg' }
       );
 
-      // Upload video to R2 (or Supabase as fallback)
-      setUploadProgress(30);
-      const videoUrl = await uploadImage(videoFile, 'videos', user.id);
+      setUploadProgress(15);
 
-      setUploadProgress(60);
-
-      // Upload thumbnail to R2 (or Supabase as fallback)
+      // Upload thumbnail first (faster, smaller file)
       const thumbnailUrl = await uploadImage(thumbnailFile, 'videos', user.id);
 
-      setUploadProgress(80);
+      setUploadProgress(20);
+
+      // Upload video with progress tracking
+      const videoUrl = await uploadVideo(
+        videoFile,
+        user.id,
+        (progress) => {
+          // Map video upload progress (20-90%)
+          const mappedProgress = 20 + (progress.percentage * 0.7);
+          setUploadProgress(Math.round(mappedProgress));
+        }
+      );
+
+      setUploadProgress(90);
 
       // Create reel record in database
       const { error: insertError } = await supabase.from('reels').insert({

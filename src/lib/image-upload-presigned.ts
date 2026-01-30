@@ -134,9 +134,11 @@ export async function uploadImage(
       const { uploadUrl, publicUrl, fileKey } = await urlResponse.json();
       console.log('Pre-signed URL received, uploading to R2...');
 
-      // Step 2: Upload directly to R2 using pre-signed URL with timeout
+      // Step 2: Upload directly to R2 using pre-signed URL with dynamic timeout
       const uploadController = new AbortController();
-      const uploadTimeoutId = setTimeout(() => uploadController.abort(), 60000); // 60 second timeout for upload
+      // Dynamic timeout based on file size: 60s base + 30s per 10MB
+      const timeoutMs = Math.min(60000 + Math.floor(file.size / (10 * 1024 * 1024)) * 30000, 300000); // Max 5 minutes
+      const uploadTimeoutId = setTimeout(() => uploadController.abort(), timeoutMs);
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
