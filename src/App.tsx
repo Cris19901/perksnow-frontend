@@ -38,6 +38,8 @@ import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { supabase } from './lib/supabase';
 import { toast, Toaster } from 'sonner';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 interface CartItem {
   id: number;
@@ -574,6 +576,10 @@ export default function App() {
           <AppContent />
         </CurrencyProvider>
       </AuthProvider>
+      {/* Vercel Analytics - tracks page views and events */}
+      <Analytics />
+      {/* Vercel Speed Insights - tracks Core Web Vitals */}
+      <SpeedInsights />
     </BrowserRouter>
   );
 }
