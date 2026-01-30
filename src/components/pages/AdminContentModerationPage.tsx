@@ -34,6 +34,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface ContentModerationPageProps {
   onNavigate?: (page: string) => void;
@@ -259,7 +260,7 @@ export default function AdminContentModerationPage({
         setComments(data || []);
       }
     } catch (err: any) {
-      console.error('Error fetching content:', err);
+      logger.error('Error fetching content:', err);
       toast.error(`Failed to load ${activeTab}`);
     } finally {
       setLoading(false);
@@ -299,7 +300,7 @@ export default function AdminContentModerationPage({
       // Update total count
       setTotalCount(prev => prev - 1);
     } catch (err: any) {
-      console.error(`Error deleting ${deleteDialog.type}:`, err);
+      logger.error(`Error deleting ${deleteDialog.type}:`, err);
       toast.error(`Failed to delete ${deleteDialog.type.slice(0, -1)}`);
     } finally {
       setDeleteDialog({ open: false, type: null, id: null, title: '' });

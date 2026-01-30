@@ -22,6 +22,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface AdminDashboardProps {
   onNavigate?: (page: string) => void;
@@ -62,7 +63,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       if (error) {
         // If user is not admin, they'll get an error here
         if (error.message.includes('Only admins')) {
-          console.error('Access denied: Admin privileges required');
+          logger.error('Access denied: Admin privileges required');
           toast.error('Access denied. You need admin privileges.');
           // Optionally redirect to home
           // navigate('/');
@@ -78,7 +79,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
         totalWithdrawals: stats?.totalWithdrawals || 0
       });
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      logger.error('Error fetching stats:', err);
     } finally {
       setLoading(false);
     }
