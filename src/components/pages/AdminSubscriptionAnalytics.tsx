@@ -188,7 +188,7 @@ export function AdminSubscriptionAnalytics() {
 
       setPlanBreakdown(breakdown);
 
-      // Fetch recent transactions
+      // Fetch recent transactions with user data in a SINGLE query (fixes N+1 problem)
       const { data: recentTx, error: recentError } = await supabase
         .from('payment_transactions')
         .select(`
@@ -200,6 +200,11 @@ export function AdminSubscriptionAnalytics() {
           paid_at,
           user_id,
           subscription_id,
+          users!user_id (
+            username,
+            full_name,
+            email
+          ),
           subscriptions (
             plan_name,
             billing_cycle
@@ -209,23 +214,13 @@ export function AdminSubscriptionAnalytics() {
         .limit(10);
 
       if (!recentError && recentTx) {
-        // Fetch user details for each transaction
-        const txWithUsers = await Promise.all(
-          recentTx.map(async (tx) => {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('username, full_name, email')
-              .eq('id', tx.user_id)
-              .single();
-
-            return {
-              ...tx,
-              user: userData || { username: 'Unknown', full_name: 'Unknown', email: '' },
-              subscription: (tx.subscriptions as any) || { plan_name: 'Unknown', billing_cycle: 'Unknown' },
-            };
-          })
-        );
-        setRecentTransactions(txWithUsers as any);
+        // Map the joined data to the expected format
+        const txWithUsers = recentTx.map((tx: any) => ({
+          ...tx,
+          user: tx.users || { username: 'Unknown', full_name: 'Unknown', email: '' },
+          subscription: tx.subscriptions || { plan_name: 'Unknown', billing_cycle: 'Unknown' },
+        }));
+        setRecentTransactions(txWithUsers);
       }
 
       // Fetch expiring subscriptions (next 7 days)
