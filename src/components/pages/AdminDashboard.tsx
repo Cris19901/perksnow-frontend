@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { StatCardSkeleton } from '../ui/skeletons';
 
 interface AdminDashboardProps {
   onNavigate?: (page: string) => void;
@@ -171,8 +172,17 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
           cartItemsCount={cartItemsCount}
           currentPage="admin"
         />
-        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="max-w-6xl mx-auto px-4 py-8 pb-28 md:pb-8">
+          <div className="mb-6">
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </div>
         </div>
       </div>
     );

@@ -11,6 +11,7 @@ import { ActivityPost } from '../ActivityPost';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { Button } from '../ui/button';
+import { PostSkeleton } from '../ui/skeletons';
 import { Crown, Sparkles, Gift, Users2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -472,11 +473,12 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
               )}
             </div>
 
-            {/* Loading State */}
+            {/* Loading State - Skeleton Loading */}
             {loading && (
-              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading your feed...</p>
+              <div className="space-y-4">
+                <PostSkeleton />
+                <PostSkeleton />
+                <PostSkeleton />
               </div>
             )}
 
