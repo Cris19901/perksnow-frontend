@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDailyLimits } from '@/hooks/useDailyLimits';
 import { uploadImage } from '@/lib/image-upload-presigned';
 import { uploadVideo, generateVideoThumbnail } from '@/lib/video-upload-optimized';
 import { toast } from 'sonner';
@@ -19,6 +20,7 @@ interface ReelUploadProps {
 
 export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
   const { user } = useAuth();
+  const { limits, checkCanPost, incrementPostCount, fetchLimits } = useDailyLimits();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -128,6 +130,13 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       return;
     }
 
+    // Check daily post limit (reels count as posts)
+    const canPost = await checkCanPost();
+    if (!canPost) {
+      toast.error(`You've reached your daily post limit (${limits.posts_limit} posts). Upgrade your subscription for more posts!`);
+      return;
+    }
+
     try {
       setUploading(true);
       setUploadProgress(5);
@@ -174,8 +183,14 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
 
       if (insertError) throw insertError;
 
+      // Increment post count (reels count as posts)
+      await incrementPostCount();
+
       setUploadProgress(100);
-      toast.success('Reel uploaded successfully! You earned 50 points! 🎉');
+      toast.success(`Reel uploaded successfully! You earned 50 points! (${limits.posts_used + 1}/${limits.posts_limit} posts used today)`);
+
+      // Refresh limits to update UI
+      await fetchLimits();
 
       // Reset form
       setTimeout(() => {
@@ -318,10 +333,29 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
               </div>
             )}
 
+            {/* Daily Limit Warning */}
+            {!limits.can_post && (
+              <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+                <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">Daily post limit reached</p>
+                  <p className="text-xs text-yellow-700 mt-0.5">
+                    You've used all {limits.posts_limit} posts for today. Upgrade your subscription for more posts!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Daily Limit Display */}
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <span>Daily posts (includes reels)</span>
+              <span className="font-medium">{limits.posts_used}/{limits.posts_limit} posts used</span>
+            </div>
+
             {/* Upload Button */}
             <Button
               onClick={handleUpload}
-              disabled={uploading || !!error || !caption.trim()}
+              disabled={uploading || !!error || !caption.trim() || !limits.can_post}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               size="lg"
             >
