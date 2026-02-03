@@ -384,19 +384,11 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                 <div className="grid grid-cols-2 gap-2 text-sm p-3 bg-gray-50 rounded-lg">
                   <div>
                     <span className="text-gray-600">Username:</span>
-                    <p className="font-medium">{selectedWithdrawal.user?.username}</p>
+                    <p className="font-medium">{selectedWithdrawal.user?.username || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-gray-600">Email:</span>
-                    <p className="font-medium">{selectedWithdrawal.account_details?.email}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Phone:</span>
-                    <p className="font-medium">{selectedWithdrawal.account_details?.phoneNumber}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Country:</span>
-                    <p className="font-medium">{selectedWithdrawal.account_details?.country}</p>
+                    <p className="font-medium">{selectedWithdrawal.user?.email || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -406,13 +398,9 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                 <h4 className="font-semibold text-sm text-gray-700">Transaction Details</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm p-3 bg-gray-50 rounded-lg">
                   <div>
-                    <span className="text-gray-600">Points:</span>
-                    <p className="font-semibold text-purple-600">{selectedWithdrawal.amount_points.toLocaleString()}</p>
-                  </div>
-                  <div>
                     <span className="text-gray-600">Amount:</span>
                     <p className="font-semibold text-green-600">
-                      {selectedWithdrawal.amount_currency.toFixed(2)} {selectedWithdrawal.account_details?.currency || 'NGN'}
+                      {selectedWithdrawal.amount.toFixed(2)} {selectedWithdrawal.currency || 'NGN'}
                     </p>
                   </div>
                   <div>
@@ -423,6 +411,10 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                     <span className="text-gray-600">Requested:</span>
                     <p className="font-medium">{formatDate(selectedWithdrawal.created_at)}</p>
                   </div>
+                  <div>
+                    <span className="text-gray-600">Status:</span>
+                    <p className="font-medium capitalize">{selectedWithdrawal.status}</p>
+                  </div>
                 </div>
               </div>
 
@@ -432,16 +424,16 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                 <div className="space-y-2 text-sm p-3 bg-gray-50 rounded-lg">
                   <div>
                     <span className="text-gray-600">Account Name:</span>
-                    <p className="font-medium">{selectedWithdrawal.account_details?.accountName}</p>
+                    <p className="font-medium">{selectedWithdrawal.account_name || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-gray-600">Account Number:</span>
-                    <p className="font-medium">{selectedWithdrawal.account_details?.accountNumber}</p>
+                    <p className="font-medium">{selectedWithdrawal.account_number || 'N/A'}</p>
                   </div>
-                  {selectedWithdrawal.account_details?.bankName && (
+                  {selectedWithdrawal.bank_name && (
                     <div>
                       <span className="text-gray-600">Bank:</span>
-                      <p className="font-medium">{selectedWithdrawal.account_details.bankName}</p>
+                      <p className="font-medium">{selectedWithdrawal.bank_name}</p>
                     </div>
                   )}
                 </div>
