@@ -29,24 +29,20 @@ interface AdminWithdrawalsPageProps {
 interface WithdrawalRequest {
   id: string;
   user_id: string;
-  amount_points: number;
-  amount_currency: number;
-  conversion_rate: number;
-  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  amount: number;
+  currency: string;
+  status: 'pending' | 'processing' | 'completed' | 'rejected' | 'cancelled';
   withdrawal_method: string;
-  account_details: {
-    phoneNumber?: string;
-    email?: string;
-    accountName?: string;
-    accountNumber?: string;
-    bankName?: string;
-    country?: string;
-    currency?: string;
-  };
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
   user_notes: string | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
+  processed_at: string | null;
+  processed_by: string | null;
+  transaction_reference: string | null;
   user?: {
     username: string;
     email: string;
@@ -66,7 +62,7 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [stats, setStats] = useState<Stats>({ pending: 0, approved: 0, completed: 0, rejected: 0, totalAmount: 0 });
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'completed' | 'rejected'>('pending');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('pending');
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
@@ -82,9 +78,9 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
     try {
       setLoading(true);
 
-      // Build query
+      // Build query - using wallet_withdrawals table
       let query = supabase
-        .from('withdrawal_requests')
+        .from('wallet_withdrawals')
         .select(`
           *,
           user:users!user_id (
@@ -108,12 +104,12 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
       const allWithdrawals = withdrawalsData || [];
       setStats({
         pending: allWithdrawals.filter(w => w.status === 'pending').length,
-        approved: allWithdrawals.filter(w => w.status === 'approved').length,
+        approved: allWithdrawals.filter(w => w.status === 'processing').length,
         completed: allWithdrawals.filter(w => w.status === 'completed').length,
         rejected: allWithdrawals.filter(w => w.status === 'rejected').length,
         totalAmount: allWithdrawals
           .filter(w => w.status === 'completed')
-          .reduce((sum, w) => sum + w.amount_currency, 0)
+          .reduce((sum, w) => sum + w.amount, 0)
       });
     } catch (error: any) {
       console.error('Error fetching withdrawals:', error);
@@ -141,10 +137,11 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
       setProcessing(true);
 
       // Call the Supabase function to process withdrawal
-      const { data, error } = await supabase.rpc('process_withdrawal_request', {
-        p_request_id: selectedWithdrawal.id,
+      const { data, error } = await supabase.rpc('process_wallet_withdrawal', {
+        p_withdrawal_id: selectedWithdrawal.id,
         p_new_status: status,
-        p_admin_notes: adminNotes.trim() || null
+        p_admin_notes: adminNotes.trim() || null,
+        p_transaction_reference: null
       });
 
       if (error) throw error;
@@ -166,7 +163,8 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'approved':
+      case 'processing':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-300';
       case 'rejected':
@@ -224,7 +222,7 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                 <Check className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Approved</p>
+                <p className="text-sm text-gray-600">Processing</p>
                 <p className="text-2xl font-bold">{stats.approved}</p>
               </div>
             </div>
@@ -270,7 +268,7 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
         {/* Filters */}
         <Card className="p-4 mb-6">
           <div className="flex flex-wrap gap-2">
-            {(['all', 'pending', 'approved', 'completed', 'rejected'] as const).map((status) => (
+            {(['all', 'pending', 'processing', 'completed', 'rejected'] as const).map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
@@ -324,7 +322,7 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                       <div>
                         <span className="text-gray-600">Amount: </span>
                         <span className="font-semibold">
-                          {withdrawal.amount_points.toLocaleString()} pts → {withdrawal.amount_currency.toFixed(2)} {withdrawal.account_details?.currency || 'NGN'}
+                          {withdrawal.amount.toFixed(2)} {withdrawal.currency || 'NGN'}
                         </span>
                       </div>
                       <div>
@@ -337,10 +335,10 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                       </div>
                     </div>
 
-                    {withdrawal.account_details?.accountName && (
+                    {withdrawal.account_name && (
                       <div className="text-sm text-gray-600 mt-1">
-                        {withdrawal.account_details.accountName} - {withdrawal.account_details.accountNumber}
-                        {withdrawal.account_details.bankName && ` (${withdrawal.account_details.bankName})`}
+                        {withdrawal.account_name} - {withdrawal.account_number}
+                        {withdrawal.bank_name && ` (${withdrawal.bank_name})`}
                       </div>
                     )}
                   </div>
