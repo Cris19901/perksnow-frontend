@@ -48,10 +48,18 @@ export function SignUpForm({ onSuccess }: { onSuccess?: () => void }) {
       // Track referral if code was provided
       if (formData.referral_code && result.user) {
         try {
-          await supabase.rpc('track_referral', {
+          const { error: refError } = await supabase.rpc('track_referral', {
             p_referee_id: result.user.id,
-            p_referral_code: formData.referral_code.toUpperCase()
+            p_referral_code: formData.referral_code.trim().toUpperCase()
           });
+
+          if (refError) {
+            console.error('Referral tracking error:', refError);
+            // Show warning but don't fail signup
+            console.warn('Referral code might be invalid:', formData.referral_code);
+          } else {
+            console.log('Referral tracked successfully');
+          }
         } catch (refErr) {
           console.error('Failed to track referral:', refErr);
           // Don't fail signup if referral tracking fails

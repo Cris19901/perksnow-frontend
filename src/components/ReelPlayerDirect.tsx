@@ -1,30 +1,35 @@
 import { useEffect, useRef } from 'react';
 import Plyr from 'plyr';
 import 'plyr/dist/plyr.css';
+import { logger } from '@/lib/logger';
 
 interface ReelPlayerDirectProps {
   videoUrl: string;
   muted?: boolean;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
+  onEnded?: () => void;
   onPlayerReady?: (player: Plyr) => void;
 }
 
-export function ReelPlayerDirect({ videoUrl, muted = false, onTimeUpdate, onPlayerReady }: ReelPlayerDirectProps) {
+export function ReelPlayerDirect({ videoUrl, muted = false, onTimeUpdate, onEnded, onPlayerReady }: ReelPlayerDirectProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Plyr | null>(null);
+  const onEndedRef = useRef(onEnded);
 
-  console.log('🔵 ReelPlayerDirect: Component rendered for video:', videoUrl);
+  // Keep onEnded ref updated
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
+  logger.debug('ReelPlayerDirect: Rendering for video', videoUrl);
 
   useEffect(() => {
-    console.log('🟢 ReelPlayerDirect: useEffect triggered');
-    console.log('🟢 ReelPlayerDirect: videoRef.current:', videoRef.current);
-
     if (!videoRef.current) {
-      console.error('❌ ReelPlayerDirect: Video ref is null - DOM element not found!');
+      logger.error('ReelPlayerDirect: Video ref is null');
       return;
     }
 
-    console.log('🎬 ReelPlayerDirect: Initializing Plyr for video:', videoUrl);
+    logger.debug('ReelPlayerDirect: Initializing Plyr');
 
     try {
       // Initialize Plyr directly on the video element
@@ -42,7 +47,7 @@ export function ReelPlayerDirect({ videoUrl, muted = false, onTimeUpdate, onPlay
       });
 
       playerRef.current = player;
-      console.log('✅ Plyr initialized successfully:', player);
+      logger.debug('ReelPlayerDirect: Plyr initialized');
 
       // Notify parent that player is ready
       if (onPlayerReady) {
@@ -55,8 +60,16 @@ export function ReelPlayerDirect({ videoUrl, muted = false, onTimeUpdate, onPlay
           onTimeUpdate(player.currentTime, player.duration);
         }
       });
+
+      // Auto-play next when video ends
+      player.on('ended', () => {
+        logger.debug('ReelPlayerDirect: Video ended');
+        if (onEndedRef.current) {
+          onEndedRef.current();
+        }
+      });
     } catch (error) {
-      console.error('❌ Error initializing Plyr:', error);
+      logger.error('ReelPlayerDirect: Error initializing Plyr', error);
       return;
     }
 

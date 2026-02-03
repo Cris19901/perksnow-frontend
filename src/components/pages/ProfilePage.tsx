@@ -13,7 +13,7 @@ import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Came
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/image-upload-presigned';
+import { uploadImage } from '@/lib/upload-service';
 import { convertHeicToJpeg } from '@/lib/heic-converter';
 import { toast } from 'sonner';
 

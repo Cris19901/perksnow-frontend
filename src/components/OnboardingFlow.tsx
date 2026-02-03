@@ -23,7 +23,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { uploadImage } from '@/lib/image-upload-presigned';
+import { uploadImage } from '@/lib/upload-service';
 
 interface OnboardingFlowProps {
   onComplete?: () => void;

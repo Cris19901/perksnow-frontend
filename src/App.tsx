@@ -143,6 +143,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Public route wrapper - redirects logged-in users to feed
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  // If user is logged in, redirect to feed
+  if (user) {
+    return <Navigate to="/feed" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { user } = useAuth();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -264,10 +284,22 @@ function AppContent() {
       )}
 
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<LandingPage onNavigate={(page) => window.location.href = `/${page}`} />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+        {/* Public routes - redirect logged-in users to feed */}
+        <Route path="/" element={
+          <PublicRoute>
+            <LandingPage onNavigate={(page) => window.location.href = `/${page}`} />
+          </PublicRoute>
+        } />
+        <Route path="/login" element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        } />
+        <Route path="/signup" element={
+          <PublicRoute>
+            <SignupPage />
+          </PublicRoute>
+        } />
         <Route path="/about" element={<AboutPage />} />
 
         {/* Protected routes */}

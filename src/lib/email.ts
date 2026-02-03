@@ -1,7 +1,12 @@
 // Email Service for LavLay
-// Handles all email sending through Resend via Supabase Edge Function
+// Handles all email sending through multi-provider Supabase Edge Function
+// Supports: Brevo, SendGrid, Elastic Email, Resend with automatic failover
 
 import { supabase } from './supabase'
+import { logger } from './logger'
+
+// Email provider options
+export type EmailProvider = 'brevo' | 'sendgrid' | 'elastic' | 'resend' | 'auto'
 
 interface EmailOptions {
   to: string | string[]
@@ -10,34 +15,66 @@ interface EmailOptions {
   text?: string
   from?: string
   replyTo?: string
+  provider?: EmailProvider // Optional: specify provider or use 'auto' for failover
+}
+
+interface EmailResult {
+  success: boolean
+  provider?: string
+  id?: string
+  error?: unknown
+  data?: unknown
 }
 
 /**
- * Send an email using the Resend service via Supabase Edge Function
+ * Send an email using the multi-provider Supabase Edge Function
+ *
+ * By default, uses automatic failover between providers in this order:
+ * 1. Brevo (300 emails/day free)
+ * 2. SendGrid (100 emails/day free)
+ * 3. Elastic Email (100 emails/day free)
+ * 4. Resend (100 emails/day free)
+ *
+ * You can also specify a specific provider if needed.
  */
-export async function sendEmail(options: EmailOptions) {
+export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('send-email', {
+    const { data, error } = await supabase.functions.invoke('send-email-multi', {
       body: {
         to: options.to,
         subject: options.subject,
         html: options.html,
         text: options.text,
-        from: options.from || 'LavLay <onboarding@resend.dev>',
-        replyTo: options.replyTo
+        from: options.from || 'LavLay <noreply@lavlay.com>',
+        replyTo: options.replyTo,
+        provider: options.provider || 'auto' // Default to automatic failover
       }
     })
 
     if (error) {
-      console.error('Email send error:', error)
+      logger.error('Email send error', error)
       return { success: false, error }
     }
 
-    return { success: true, data }
+    if (data?.success) {
+      logger.log('Email sent successfully via', data.provider)
+    }
+
+    return { success: data?.success ?? false, ...data }
   } catch (err) {
-    console.error('Email send exception:', err)
+    logger.error('Email send exception', err)
     return { success: false, error: err }
   }
+}
+
+/**
+ * Send email with specific provider (no failover)
+ */
+export async function sendEmailWithProvider(
+  options: Omit<EmailOptions, 'provider'>,
+  provider: EmailProvider
+): Promise<EmailResult> {
+  return sendEmail({ ...options, provider })
 }
 
 /**

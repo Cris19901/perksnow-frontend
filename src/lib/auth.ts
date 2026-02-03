@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { sendSignupBonusEmail } from './email';
+import { logger } from './logger';
+import type { User } from '@supabase/supabase-js';
 
 export interface SignUpData {
   email: string;
@@ -61,8 +63,8 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
 
     if (profileError) {
       // Log the exact error for debugging
-      console.error('Profile creation error:', profileError);
-      console.error('Error details:', {
+      logger.error('Profile creation error', profileError);
+      logger.debug('Error details', {
         message: profileError.message,
         code: profileError.code,
         details: profileError.details,
@@ -79,7 +81,7 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
     // Don't await this - let it run in background
     setTimeout(async () => {
       try {
-        console.log('🔍 [SIGNUP] Checking for signup bonus...');
+        logger.log('[SIGNUP] Checking for signup bonus...');
 
         // Retry logic to wait for trigger to complete
         let bonusData = null;
@@ -88,7 +90,7 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
 
         while (!bonusData && attempts < maxAttempts) {
           attempts++;
-          console.log(`🔍 [SIGNUP] Attempt ${attempts}/${maxAttempts} to find bonus...`);
+          logger.debug(`[SIGNUP] Attempt ${attempts}/${maxAttempts} to find bonus...`);
 
           const { data, error } = await supabase
             .from('signup_bonus_history')
@@ -97,13 +99,13 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
             .maybeSingle();
 
           if (error) {
-            console.error('❌ [SIGNUP] Error querying bonus:', error);
+            logger.error('[SIGNUP] Error querying bonus', error);
             break;
           }
 
           if (data) {
             bonusData = data;
-            console.log('✅ [SIGNUP] Bonus found:', data);
+            logger.log('[SIGNUP] Bonus found:', data);
             break;
           }
 
@@ -114,14 +116,14 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
         }
 
         if (!bonusData) {
-          console.warn('⚠️ [SIGNUP] No signup bonus found after', maxAttempts, 'attempts');
-          console.log('💡 [SIGNUP] System might be disabled or trigger not firing');
+          logger.warn('[SIGNUP] No signup bonus found after', maxAttempts, 'attempts');
+          logger.debug('[SIGNUP] System might be disabled or trigger not firing');
           return;
         }
 
         const bonusAmount = bonusData.bonus_amount;
 
-        console.log(`📧 [SIGNUP] Sending welcome email with ${bonusAmount} points bonus...`);
+        logger.log(`[SIGNUP] Sending welcome email with ${bonusAmount} points bonus...`);
 
         // Send welcome email with bonus
         const emailResult = await sendSignupBonusEmail(
@@ -130,10 +132,10 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
           bonusAmount
         );
 
-        console.log('📧 [SIGNUP] Email send result:', emailResult);
+        logger.log('[SIGNUP] Email send result:', emailResult);
 
         if (emailResult.success) {
-          console.log('✅ [SIGNUP] Welcome email sent successfully');
+          logger.log('[SIGNUP] Welcome email sent successfully');
 
           // Mark email as sent in database
           if (!bonusData.email_sent) {
@@ -142,24 +144,23 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
             });
 
             if (markError) {
-              console.error('⚠️ [SIGNUP] Failed to mark email as sent:', markError);
+              logger.error('[SIGNUP] Failed to mark email as sent', markError);
             } else {
-              console.log('✅ [SIGNUP] Email marked as sent in database');
+              logger.log('[SIGNUP] Email marked as sent in database');
             }
           }
         } else {
-          console.error('❌ [SIGNUP] Failed to send welcome email:', emailResult.error);
+          logger.error('[SIGNUP] Failed to send welcome email', emailResult.error);
         }
-      } catch (err: any) {
-        console.error('❌ [SIGNUP] Error in email sending process:', err);
-        console.error('❌ [SIGNUP] Error message:', err.message);
-        console.error('❌ [SIGNUP] Stack trace:', err.stack);
+      } catch (err: unknown) {
+        const error = err as Error;
+        logger.error('[SIGNUP] Error in email sending process', error);
       }
     }, 2000); // Start checking after 2 seconds
 
     return { user: authData.user, session: authData.session };
   } catch (error) {
-    console.error('Error signing up:', error);
+    logger.error('Error signing up', error);
     throw error;
   }
 };
@@ -177,7 +178,7 @@ export const signIn = async ({ email, password }: SignInData) => {
     if (error) throw error;
     return { user: data.user, session: data.session };
   } catch (error) {
-    console.error('Error signing in:', error);
+    logger.error('Error signing in', error);
     throw error;
   }
 };
@@ -190,7 +191,7 @@ export const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   } catch (error) {
-    console.error('Error signing out:', error);
+    logger.error('Error signing out', error);
     throw error;
   }
 };
@@ -204,7 +205,7 @@ export const getCurrentUser = async () => {
     if (error) throw error;
     return user;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    logger.error('Error getting current user', error);
     return null;
   }
 };
@@ -218,7 +219,7 @@ export const getSession = async () => {
     if (error) throw error;
     return session;
   } catch (error) {
-    console.error('Error getting session:', error);
+    logger.error('Error getting session', error);
     return null;
   }
 };
@@ -226,7 +227,7 @@ export const getSession = async () => {
 /**
  * Listen to auth state changes
  */
-export const onAuthStateChange = (callback: (user: any) => void) => {
+export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return supabase.auth.onAuthStateChange((_event, session) => {
     callback(session?.user ?? null);
   });

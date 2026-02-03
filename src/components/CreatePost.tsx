@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { convertFilesIfNeeded } from '@/lib/heic-converter';
 import { useDailyLimits } from '@/hooks/useDailyLimits';
+import { uploadImage } from '@/lib/upload-service';
+import { logger } from '@/lib/logger';
 import {
   Popover,
   PopoverContent,
@@ -104,7 +106,7 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
       setUploadedImages(prev => [...prev, ...newImages]);
     } catch (error: any) {
-      console.error('Error processing images:', error);
+      logger.error('Error processing images', error);
       toast.error(error.message || 'Failed to process images');
     } finally {
       // Reset file input
@@ -148,37 +150,21 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
     setError(null);
 
     try {
-      console.log('🔍 CreatePost: Creating post with', uploadedImages.length, 'images...');
+      logger.log('CreatePost: Creating post with', uploadedImages.length, 'images');
 
-      // Upload all images to storage first
+      // Upload all images using unified upload service
       const imageUrls: string[] = [];
       for (let i = 0; i < uploadedImages.length; i++) {
         const image = uploadedImages[i];
         toast.loading(`Uploading image ${i + 1}/${uploadedImages.length}...`);
 
         try {
-          const fileExt = image.file.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-          const { data, error: uploadError } = await supabase.storage
-            .from('posts')
-            .upload(fileName, image.file);
-
-          if (uploadError) {
-            console.error('❌ Storage upload error:', uploadError);
-            throw uploadError;
-          }
-
-          // Get public URL
-          const { data: publicUrl } = supabase.storage
-            .from('posts')
-            .getPublicUrl(data.path);
-
-          imageUrls.push(publicUrl.publicUrl);
-          console.log(`✅ CreatePost: Image ${i + 1} uploaded:`, publicUrl.publicUrl);
-        } catch (uploadErr) {
-          console.error(`❌ Failed to upload image ${i + 1}:`, uploadErr);
-          throw new Error(`Failed to upload image ${i + 1}`);
+          const url = await uploadImage(image.file, 'posts', user.id);
+          imageUrls.push(url);
+          logger.log(`CreatePost: Image ${i + 1} uploaded:`, url);
+        } catch (uploadErr: any) {
+          logger.error(`Failed to upload image ${i + 1}`, uploadErr);
+          throw new Error(uploadErr.message || `Failed to upload image ${i + 1}`);
         }
       }
 
@@ -208,11 +194,11 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         .single();
 
       if (insertError) {
-        console.error('❌ CreatePost: Error creating post:', insertError);
+        logger.error('CreatePost: Error creating post', insertError);
         throw insertError;
       }
 
-      console.log('✅ CreatePost: Post created successfully:', post);
+      logger.log('CreatePost: Post created successfully', post);
 
       // Insert all images into post_images table
       if (imageUrls.length > 0) {
@@ -227,10 +213,10 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
           .insert(postImages);
 
         if (imagesError) {
-          console.error('❌ CreatePost: Error inserting images:', imagesError);
+          logger.error('CreatePost: Error inserting images', imagesError);
           // Don't throw - post is already created
         } else {
-          console.log('✅ CreatePost:', imageUrls.length, 'images linked to post');
+          logger.log('CreatePost:', imageUrls.length, 'images linked to post');
         }
       }
 
@@ -255,7 +241,7 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         onPostCreated();
       }
     } catch (err: any) {
-      console.error('❌ CreatePost: Post creation failed:', err);
+      logger.error('CreatePost: Post creation failed', err);
       setError(err.message || 'Failed to create post');
       toast.error('Failed to create post');
     } finally {

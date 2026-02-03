@@ -9,8 +9,7 @@ import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDailyLimits } from '@/hooks/useDailyLimits';
-import { uploadImage } from '@/lib/image-upload-presigned';
-import { uploadVideo, generateVideoThumbnail } from '@/lib/video-upload-optimized';
+import { uploadImage, uploadVideo, generateVideoThumbnail } from '@/lib/upload-service';
 import { toast } from 'sonner';
 
 interface ReelUploadProps {

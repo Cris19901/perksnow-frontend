@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Heart, MessageCircle, Share2, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -9,6 +9,8 @@ import { Button } from './ui/button';
 import { ReelComments } from './ReelComments';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { ReelPlayerDirect } from './ReelPlayerDirect';
+import { ReelPreloader } from './ReelPreloader';
+import { logger } from '@/lib/logger';
 
 interface Reel {
   reel_id: string;
@@ -370,10 +372,32 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
 
   const currentReel = reels[currentIndex];
 
-  console.log('🟣 ReelsViewerPro: Rendering with reel:', currentReel?.reel_id, currentReel?.video_url);
+  // Get all video URLs for preloading
+  const videoUrls = useMemo(() => reels.map(r => r.video_url), [reels]);
+
+  // Auto-play next reel when current one ends
+  const handleVideoEnded = useCallback(() => {
+    if (currentIndex < reels.length - 1) {
+      logger.log('Reel ended, auto-playing next');
+      isTransitioning.current = true;
+      setCurrentIndex(prev => prev + 1);
+      setTimeout(() => {
+        isTransitioning.current = false;
+      }, 300);
+    }
+  }, [currentIndex, reels.length]);
+
+  logger.debug('ReelsViewerPro: Rendering reel', currentReel?.reel_id);
 
   return (
     <>
+      {/* Preload adjacent videos for smoother playback */}
+      <ReelPreloader
+        videoUrls={videoUrls}
+        currentIndex={currentIndex}
+        preloadCount={2}
+      />
+
       <div
         ref={containerRef}
         onWheel={handleScroll}
@@ -393,6 +417,7 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
             videoUrl={currentReel.video_url}
             muted={muted}
             onTimeUpdate={handleTimeUpdate}
+            onEnded={handleVideoEnded}
             onPlayerReady={(player) => {
               currentPlayerRef.current = player;
             }}
