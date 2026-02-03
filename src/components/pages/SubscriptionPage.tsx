@@ -67,12 +67,14 @@ export default function SubscriptionPage() {
           expires_at: userData.subscription_expires_at,
         });
 
-        // Check if user has ever subscribed to Daily plan
+        // Check if user has ever SUCCESSFULLY subscribed to Daily plan
+        // Only count active/completed subscriptions, not pending/failed ones
         const { data: dailySubscriptions } = await supabase
           .from('subscriptions')
           .select('id')
           .eq('user_id', user.id)
           .eq('plan_name', 'daily')
+          .in('status', ['active', 'completed', 'expired'])
           .limit(1);
 
         setHasUsedDaily((dailySubscriptions?.length ?? 0) > 0);
