@@ -373,7 +373,8 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   const currentReel = reels[currentIndex];
 
   // Get all video URLs for preloading
-  const videoUrls = reels.map(r => r.video_url);
+  // Temporarily disabled - was causing useMemo error
+  // const videoUrls = (reels || []).map(r => r.video_url);
 
   // Auto-play next reel when current one ends
   const handleVideoEnded = useCallback(() => {
@@ -392,11 +393,12 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   return (
     <>
       {/* Preload adjacent videos for smoother playback */}
-      <ReelPreloader
+      {/* Temporarily disabled to fix useMemo error */}
+      {/* <ReelPreloader
         videoUrls={videoUrls}
         currentIndex={currentIndex}
         preloadCount={2}
-      />
+      /> */}
 
       <div
         ref={containerRef}
