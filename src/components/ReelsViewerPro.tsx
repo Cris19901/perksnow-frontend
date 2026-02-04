@@ -373,7 +373,7 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   const currentReel = reels[currentIndex];
 
   // Get all video URLs for preloading
-  const videoUrls = useMemo(() => reels.map(r => r.video_url), [reels]);
+  const videoUrls = reels.map(r => r.video_url);
 
   // Auto-play next reel when current one ends
   const handleVideoEnded = useCallback(() => {
