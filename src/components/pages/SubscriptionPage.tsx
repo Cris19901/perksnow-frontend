@@ -34,7 +34,6 @@ export default function SubscriptionPage() {
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
-  const [hasUsedDaily, setHasUsedDaily] = useState(false);
 
   useEffect(() => {
     loadPlansAndSubscription();
@@ -66,18 +65,6 @@ export default function SubscriptionPage() {
           status: userData.subscription_status,
           expires_at: userData.subscription_expires_at,
         });
-
-        // Check if user has ever SUCCESSFULLY subscribed to Daily plan
-        // Only count active/completed subscriptions, not pending/failed ones
-        const { data: dailySubscriptions } = await supabase
-          .from('subscriptions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('plan_name', 'daily')
-          .in('status', ['active', 'completed', 'expired'])
-          .limit(1);
-
-        setHasUsedDaily((dailySubscriptions?.length ?? 0) > 0);
       }
     } catch (error: any) {
       console.error('Error loading plans:', error);
@@ -95,12 +82,6 @@ export default function SubscriptionPage() {
 
     if (planName === 'free') {
       toast.error('You are already on the Free plan');
-      return;
-    }
-
-    // Check if user is trying to subscribe to Daily again
-    if (planName === 'daily' && hasUsedDaily) {
-      toast.error('Daily plan is a one-time offer. Please choose Starter, Basic, or Pro.');
       return;
     }
 
@@ -197,12 +178,11 @@ export default function SubscriptionPage() {
     const isPro = plan.name === 'pro';
     const isBasic = plan.name === 'basic';
     const isDaily = plan.name === 'daily';
-    const isDailyUsed = isDaily && hasUsedDaily;
 
     return (
       <Card
         key={plan.id}
-        className={`relative ${isPro ? 'border-purple-500 border-2 shadow-lg' : ''} ${isBasic ? 'border-blue-500 border-2' : ''} ${isDailyUsed ? 'opacity-60' : ''}`}
+        className={`relative ${isPro ? 'border-purple-500 border-2 shadow-lg' : ''} ${isBasic ? 'border-blue-500 border-2' : ''}`}
       >
         {isPro && (
           <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
@@ -222,9 +202,9 @@ export default function SubscriptionPage() {
         )}
         {isDaily && (
           <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-            <Badge className={`${isDailyUsed ? 'bg-gray-500' : 'bg-green-500'} text-white px-3 py-1 text-xs`}>
+            <Badge className="bg-green-500 text-white px-3 py-1 text-xs">
               <Clock className="w-3 h-3 mr-1 inline" />
-              {isDailyUsed ? 'One-time Only' : 'Quick Access'}
+              Quick Access
             </Badge>
           </div>
         )}
@@ -299,10 +279,6 @@ export default function SubscriptionPage() {
             <Button variant="outline" className="w-full" disabled>
               {isCurrentPlan ? 'Current Plan' : 'Default Plan'}
             </Button>
-          ) : isDailyUsed ? (
-            <Button variant="outline" className="w-full" disabled>
-              Already Used
-            </Button>
           ) : isCurrentPlan && userSubscription?.status === 'active' ? (
             <Button
               className="w-full"
@@ -320,7 +296,7 @@ export default function SubscriptionPage() {
             </Button>
           ) : (
             <Button
-              className={`w-full ${isPro ? 'bg-purple-600 hover:bg-purple-700' : ''} ${isBasic ? 'bg-blue-600 hover:bg-blue-700' : ''} ${isDaily ? 'bg-green-600 hover:bg-green-700' : ''}`}
+              className={`w-full ${isPro ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isBasic ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''} ${isDaily ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
               onClick={() => handleSubscribe(plan.id, plan.name)}
               disabled={subscribing === plan.id}
             >

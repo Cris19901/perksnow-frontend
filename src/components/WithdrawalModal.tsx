@@ -130,17 +130,17 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
 
       // Check last withdrawal date
       const { data: lastWithdrawal, error } = await supabase
-        .from('withdrawal_requests')
+        .from('wallet_withdrawals')
         .select('created_at')
         .eq('user_id', user.id)
-        .in('status', ['pending', 'approved', 'completed'])
+        .in('status', ['pending', 'processing', 'completed'])
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
 
       if (error && error.code !== 'PGRST116') {
         // PGRST116 is "no rows returned", which is fine
-        console.log('Note: withdrawal_requests table may not exist yet');
+        console.log('Note: wallet_withdrawals table may not exist yet');
         setCanWithdraw(true);
         return;
       }
@@ -290,23 +290,17 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
         accountDetails.bankName = bankName.trim();
       }
 
-      // Calculate conversion rate (points per currency unit)
-      const conversionRate = selectedCurrency === 'NGN'
-        ? POINTS_TO_NGN
-        : (exchangeRates && exchangeRates[selectedCurrency])
-          ? POINTS_TO_NGN / (ngnAmount / parseFloat(currencyAmount))
-          : POINTS_TO_NGN;
-
       // Create withdrawal request
       const { error } = await supabase
-        .from('withdrawal_requests')
+        .from('wallet_withdrawals')
         .insert({
           user_id: user.id,
-          amount_points: points,
-          amount_currency: parseFloat(currencyAmount),
-          conversion_rate: conversionRate,
+          amount: parseFloat(currencyAmount),
+          currency: selectedCurrency,
           withdrawal_method: withdrawalMethod,
-          account_details: accountDetails,
+          bank_name: withdrawalMethod === 'bank' ? bankName.trim() : null,
+          account_number: accountNumber.trim(),
+          account_name: accountName.trim(),
           user_notes: notes.trim() || null,
           status: 'pending'
         });
