@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Header } from '../Header';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { ReelUpload } from '../ReelUpload';
-import { ReelsViewer } from '../ReelsViewer';
+import { ReelsViewerPro } from '../ReelsViewerPro';
 import { PlaySquare, Upload, Play, Eye, Heart, MessageCircle, Plus, Maximize2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -291,7 +291,7 @@ export function ReelsPage({ onNavigate, onCartClick, cartItemsCount }: ReelsPage
 
       {/* Reels Viewer */}
       {showViewer && (
-        <ReelsViewer
+        <ReelsViewerPro
           initialReelId={selectedReelId || undefined}
           onClose={() => {
             setShowViewer(false);

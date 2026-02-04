@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -216,28 +216,25 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
     }
   };
 
-  const handleScroll = useCallback(
-    (e: React.WheelEvent) => {
-      if (isTransitioning.current) return;
+  const handleScroll = (e: React.WheelEvent) => {
+    if (isTransitioning.current) return;
 
-      const delta = e.deltaY;
+    const delta = e.deltaY;
 
-      if (delta > 0 && currentIndex < reels.length - 1) {
-        isTransitioning.current = true;
-        setCurrentIndex(prev => prev + 1);
-        setTimeout(() => {
-          isTransitioning.current = false;
-        }, 600);
-      } else if (delta < 0 && currentIndex > 0) {
-        isTransitioning.current = true;
-        setCurrentIndex(prev => prev - 1);
-        setTimeout(() => {
-          isTransitioning.current = false;
-        }, 600);
-      }
-    },
-    [currentIndex, reels.length]
-  );
+    if (delta > 0 && currentIndex < reels.length - 1) {
+      isTransitioning.current = true;
+      setCurrentIndex(prev => prev + 1);
+      setTimeout(() => {
+        isTransitioning.current = false;
+      }, 600);
+    } else if (delta < 0 && currentIndex > 0) {
+      isTransitioning.current = true;
+      setCurrentIndex(prev => prev - 1);
+      setTimeout(() => {
+        isTransitioning.current = false;
+      }, 600);
+    }
+  };
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -377,7 +374,7 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
   // const videoUrls = (reels || []).map(r => r.video_url);
 
   // Auto-play next reel when current one ends
-  const handleVideoEnded = useCallback(() => {
+  const handleVideoEnded = () => {
     if (currentIndex < reels.length - 1) {
       logger.log('Reel ended, auto-playing next');
       isTransitioning.current = true;
@@ -386,7 +383,7 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
         isTransitioning.current = false;
       }, 300);
     }
-  }, [currentIndex, reels.length]);
+  };
 
   logger.debug('ReelsViewerPro: Rendering reel', currentReel?.reel_id);
 
