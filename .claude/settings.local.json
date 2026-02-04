@@ -50,7 +50,8 @@
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
       "Bash(del fix-plans.mjs)",
-      "Bash(timeout 60 bash:*)"
+      "Bash(timeout 60 bash:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

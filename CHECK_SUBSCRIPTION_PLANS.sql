@@ -1,11 +1,20 @@
--- Check subscription plans table structure and data
+-- Check all subscription plans in the database
 SELECT
-  column_name,
-  data_type,
-  is_nullable
-FROM information_schema.columns
-WHERE table_name = 'subscription_plans'
-ORDER BY ordinal_position;
+  name,
+  is_active,
+  price_monthly,
+  price_yearly,
+  sort_order,
+  created_at
+FROM subscription_plans
+ORDER BY sort_order;
 
--- View all current subscription plans
-SELECT * FROM subscription_plans ORDER BY price_ngn;
+-- Specifically check for Daily plan
+SELECT
+  'Daily plan status' as info,
+  name,
+  is_active,
+  price_monthly,
+  sort_order
+FROM subscription_plans
+WHERE name = 'daily' OR name ILIKE '%daily%';
