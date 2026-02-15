@@ -24,6 +24,7 @@ import { AdminReferralSettingsPage } from './components/pages/AdminReferralSetti
 import { AdminSignupBonusPage } from './components/pages/AdminSignupBonusPage';
 import { AdminUserManagementPage } from './components/pages/AdminUserManagementPage';
 import AdminContentModerationPage from './components/pages/AdminContentModerationPage';
+import { AdminAuditLogPage } from './components/pages/AdminAuditLogPage';
 import { AdminSubscriptionAnalytics } from './components/pages/AdminSubscriptionAnalytics';
 import { HashtagPage } from './components/pages/HashtagPage';
 import { PeoplePage } from './components/pages/PeoplePage';
@@ -36,6 +37,7 @@ import DiagnosticPage from './pages/DiagnosticPage';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
+import PhoneVerificationBanner from './components/PhoneVerificationBanner';
 import { supabase } from './lib/supabase';
 import { toast, Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/react';
@@ -274,6 +276,9 @@ function AppContent() {
   return (
     <>
       <Toaster position="top-center" richColors />
+
+      {/* Phone Verification Banner - Added for security */}
+      <PhoneVerificationBanner />
 
       {/* Onboarding Flow */}
       {showOnboarding && !checkingOnboarding && (
@@ -526,6 +531,17 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminSignupBonusPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/audit-log"
+          element={
+            <ProtectedRoute>
+              <AdminAuditLogPage
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />

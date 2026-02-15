@@ -9,20 +9,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import PhoneOTPVerification from './PhoneOTPVerification';
 
 interface WithdrawalModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentBalance: number;
+  maturedBalance?: number;
   onSuccess?: () => void;
 }
 
 // Conversion rate: 10 points = 1 NGN
 const POINTS_TO_NGN = 0.1; // 1 point = 0.1 NGN (or 10 points = 1 NGN)
-const MIN_WITHDRAWAL_POINTS = 5000; // Minimum 5,000 points (= 500 NGN) - lowered for first withdrawal
+const MIN_WITHDRAWAL_POINTS = 1000; // Minimum 1,000 points (= 100 NGN)
 const WITHDRAWAL_FREQUENCY_DAYS = 15; // Can withdraw once every 15 days
 
-export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess }: WithdrawalModalProps) {
+export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBalance, onSuccess }: WithdrawalModalProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [pointsToWithdraw, setPointsToWithdraw] = useState<string>('');
@@ -48,9 +50,13 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
   const [ineligibilityReason, setIneligibilityReason] = useState<string>('');
   const [maxWithdrawalPoints, setMaxWithdrawalPoints] = useState<number>(999999999);
   const [withdrawalCount, setWithdrawalCount] = useState<number>(0);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [registeredPhone, setRegisteredPhone] = useState<string | null>(null);
 
   const points = parseInt(pointsToWithdraw) || 0;
   const ngnAmount = points * POINTS_TO_NGN;
+  const withdrawableBalance = maturedBalance ?? currentBalance;
+  const frozenAmount = currentBalance - withdrawableBalance;
 
   // Calculate amount in selected currency
   const calculateCurrencyAmount = () => {
@@ -103,27 +109,35 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
       if (withdrawError) {
         console.error('Error checking withdrawal eligibility:', withdrawError);
         // Default to checking user's subscription tier directly
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('subscription_tier, subscription_status, subscription_expires_at')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-        const isPro = userData?.subscription_tier === 'pro'
-          && userData?.subscription_status === 'active'
-          && (!userData?.subscription_expires_at || new Date(userData.subscription_expires_at) > new Date());
-
-        setHasActiveMembership(isPro);
-        if (!isPro) {
+        if (userError || !userData) {
+          console.error('Error fetching user data:', userError);
           setCanWithdraw(false);
-          setIneligibilityReason('You need an active Pro subscription to withdraw earnings');
+          setIneligibilityReason('Unable to verify account status. Please try again.');
+          return;
+        }
+
+        const isPaidTier = userData.subscription_tier
+          && userData.subscription_tier !== 'free'
+          && userData.subscription_status === 'active'
+          && (!userData.subscription_expires_at || new Date(userData.subscription_expires_at) > new Date());
+
+        setHasActiveMembership(!!isPaidTier);
+        if (!isPaidTier) {
+          setCanWithdraw(false);
+          setIneligibilityReason('You need an active subscription to withdraw earnings');
           return;
         }
       } else {
         setHasActiveMembership(canWithdrawData);
         if (!canWithdrawData) {
           setCanWithdraw(false);
-          setIneligibilityReason('You need an active Pro subscription to withdraw earnings');
+          setIneligibilityReason('You need an active subscription to withdraw earnings');
           return;
         }
       }
@@ -199,13 +213,15 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
     try {
       const { data: userData } = await supabase
         .from('users')
-        .select('email, phone')
+        .select('email, phone_number, phone')
         .eq('id', user.id)
         .single();
 
       if (userData) {
         setEmail(userData.email || '');
-        setPhoneNumber(userData.phone || '');
+        const phone = userData.phone_number || userData.phone || '';
+        setPhoneNumber(phone);
+        setRegisteredPhone(phone || null);
       }
     } catch (error) {
       console.log('Could not prefill user data:', error);
@@ -221,6 +237,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
     setBankName('');
     setCountry('Nigeria');
     setNotes('');
+    setOtpVerified(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -251,8 +268,10 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
       return;
     }
 
-    if (points > currentBalance) {
-      toast.error('Insufficient points balance');
+    if (points > withdrawableBalance) {
+      toast.error(frozenAmount > 0
+        ? `Only ${withdrawableBalance.toLocaleString()} matured points available. ${frozenAmount.toLocaleString()} points still maturing.`
+        : 'Insufficient points balance');
       return;
     }
 
@@ -275,6 +294,21 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
 
     try {
       setSubmitting(true);
+
+      // Check bank account cooldown (anti-fraud)
+      const { data: cooldownCheck, error: cooldownError } = await supabase
+        .rpc('check_bank_account_cooldown', {
+          p_user_id: user.id,
+          p_account_number: accountNumber.trim(),
+        });
+
+      if (cooldownError) {
+        console.error('Cooldown check error:', cooldownError);
+      } else if (cooldownCheck && !cooldownCheck.allowed) {
+        toast.error(`This bank account is temporarily unavailable. Please try again in ${cooldownCheck.days_remaining} days or use a different account.`);
+        setSubmitting(false);
+        return;
+      }
 
       // Prepare account details
       const accountDetails: any = {
@@ -306,6 +340,13 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
         });
 
       if (error) throw error;
+
+      // Record bank account usage for cooldown tracking
+      await supabase.rpc('record_bank_account_usage', {
+        p_user_id: user.id,
+        p_account_number: accountNumber.trim(),
+        p_bank_name: withdrawalMethod === 'bank' ? bankName.trim() : null,
+      });
 
       toast.success('Withdrawal request submitted successfully! You will be notified once processed.');
       resetForm();
@@ -350,49 +391,89 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
           </div>
         ) : !canWithdraw ? (
           <div className="p-6 text-center">
-            <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold mb-2">Withdrawal Not Available</h3>
-            <p className="text-gray-600 mb-4">
-              {ineligibilityReason || 'You are not eligible for withdrawal at this time'}
-            </p>
             {!hasActiveMembership ? (
               <>
-                <p className="text-sm text-gray-500 mb-4">
-                  Upgrade to Pro to unlock withdrawal features and start earning real money!
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Crown className="w-8 h-8 text-purple-600" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Unlock Your Earnings</h3>
+
+                {currentBalance > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                    <p className="text-2xl font-bold text-green-700">{currentBalance.toLocaleString()} points</p>
+                    <p className="text-sm text-green-600">= &#8358;{(currentBalance * POINTS_TO_NGN).toLocaleString()} waiting for you</p>
+                  </div>
+                )}
+
+                <p className="text-gray-600 mb-2">
+                  Subscribe to any paid plan to withdraw your earnings to your bank account.
                 </p>
+                <p className="text-sm text-gray-500 mb-4">
+                  The <span className="font-semibold">Daily plan (&#8358;200)</span> gives you instant withdrawal access for 24 hours.
+                </p>
+
+                <div className="space-y-2">
+                  <Button
+                    onClick={() => {
+                      onOpenChange(false);
+                      navigate('/subscription');
+                    }}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  >
+                    <Crown className="w-4 h-4 mr-2" />
+                    View Plans — Starting at &#8358;200
+                  </Button>
+                  <Button
+                    onClick={() => onOpenChange(false)}
+                    variant="ghost"
+                    className="w-full text-gray-500"
+                  >
+                    Maybe Later
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold mb-2">Withdrawal Not Available</h3>
+                <p className="text-gray-600 mb-4">
+                  {ineligibilityReason || 'You are not eligible for withdrawal at this time'}
+                </p>
+                {nextWithdrawalDate && (
+                  <p className="text-sm text-gray-500 mb-4">
+                    Withdrawals are allowed once every {WITHDRAWAL_FREQUENCY_DAYS} days
+                  </p>
+                )}
                 <Button
-                  onClick={() => {
-                    onOpenChange(false);
-                    navigate('/subscription');
-                  }}
-                  className="mt-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  onClick={() => onOpenChange(false)}
+                  variant="outline"
                 >
-                  <Crown className="w-4 h-4 mr-2" />
-                  Upgrade to Pro
+                  Close
                 </Button>
               </>
-            ) : nextWithdrawalDate ? (
-              <p className="text-sm text-gray-500">
-                Withdrawals are allowed once every {WITHDRAWAL_FREQUENCY_DAYS} days
-              </p>
-            ) : null}
-            <Button
-              onClick={() => onOpenChange(false)}
-              variant="outline"
-              className="mt-4"
-            >
-              Close
-            </Button>
+            )}
           </div>
+        ) : !otpVerified ? (
+          <PhoneOTPVerification
+            phoneNumber={registeredPhone || phoneNumber}
+            purpose="withdrawal"
+            onVerified={() => setOtpVerified(true)}
+            onCancel={() => onOpenChange(false)}
+          />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Current Balance */}
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border border-purple-200">
-              <p className="text-sm text-gray-600 mb-1">Available Balance</p>
-              <p className="text-2xl font-bold text-purple-600">{currentBalance.toLocaleString()} points</p>
+              <p className="text-sm text-gray-600 mb-1">Withdrawable Balance</p>
+              <p className="text-2xl font-bold text-purple-600">{withdrawableBalance.toLocaleString()} points</p>
               <p className="text-xs text-gray-500 mt-1">
-                = {(currentBalance * POINTS_TO_NGN).toLocaleString()} NGN • Minimum: {MIN_WITHDRAWAL_POINTS.toLocaleString()} points
+                = {(withdrawableBalance * POINTS_TO_NGN).toLocaleString()} NGN • Minimum: {MIN_WITHDRAWAL_POINTS.toLocaleString()} points
               </p>
+              {frozenAmount > 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  + {frozenAmount.toLocaleString()} points still maturing (7-day hold)
+                </p>
+              )}
             </div>
 
             {/* Points to Withdraw */}
@@ -402,7 +483,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
                 id="points"
                 type="number"
                 min={MIN_WITHDRAWAL_POINTS}
-                max={Math.min(currentBalance, maxWithdrawalPoints)}
+                max={Math.min(withdrawableBalance, maxWithdrawalPoints)}
                 value={pointsToWithdraw}
                 onChange={(e) => setPointsToWithdraw(e.target.value)}
                 placeholder={`Enter points (min ${MIN_WITHDRAWAL_POINTS.toLocaleString()})`}
@@ -486,11 +567,15 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
                     id="phoneNumber"
                     type="tel"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={(e) => !registeredPhone && setPhoneNumber(e.target.value)}
+                    readOnly={!!registeredPhone}
                     placeholder="+234 XXX XXX XXXX"
                     required
-                    className="mt-1"
+                    className={`mt-1 ${registeredPhone ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                   />
+                  {registeredPhone && (
+                    <p className="text-xs text-gray-500 mt-1">Using your registered phone number</p>
+                  )}
                 </div>
 
                 <div>
@@ -595,7 +680,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, onSuccess 
               </Button>
               <Button
                 type="submit"
-                disabled={submitting || points < MIN_WITHDRAWAL_POINTS || points > currentBalance || !canWithdraw}
+                disabled={submitting || points < MIN_WITHDRAWAL_POINTS || points > withdrawableBalance || !canWithdraw}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
               >
                 {submitting ? 'Submitting...' : 'Submit Request'}
