@@ -1,6 +1,6 @@
 // ============================================================================
-// FILE 2 of 4: src/components/PhoneOTPVerification.tsx
-// PURPOSE: 6-digit OTP input component for phone verification
+// FIXED: src/components/PhoneOTPVerification.tsx
+// Added validation to prevent sending empty phone numbers
 // ============================================================================
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -42,7 +42,13 @@ export default function PhoneOTPVerification({
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (!otpSent) handleSendOTP();
+    // ✅ FIX: Only send OTP if phone number is valid
+    if (!otpSent && phoneNumber && phoneNumber.trim()) {
+      handleSendOTP();
+    } else if (!phoneNumber || !phoneNumber.trim()) {
+      setError('Phone number is required');
+      toast.error('Phone number is missing');
+    }
   }, []);
 
   useEffect(() => {
@@ -50,11 +56,18 @@ export default function PhoneOTPVerification({
   }, [otpSent]);
 
   const handleSendOTP = async () => {
+    // ✅ FIX: Validate phone number before sending
+    if (!phoneNumber || !phoneNumber.trim()) {
+      setError('Phone number is required');
+      toast.error('Phone number is missing');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
 
-      // Generate OTP using YOUR existing function
+      // Generate OTP
       const { data: otpData, error: otpError } = await supabase
         .rpc('generate_otp', {
           p_user_id: user?.id,
@@ -62,17 +75,55 @@ export default function PhoneOTPVerification({
         });
 
       if (otpError) throw otpError;
+      if (!otpData || otpData.length === 0) {
+        throw new Error('Failed to generate OTP');
+      }
 
-      // Send SMS
+      // Send SMS with validation
+      console.log('Sending OTP to:', phoneNumber);
       const smsResult = await sendOTPSMS(phoneNumber, otpData[0].code, purpose);
-      if (!smsResult.success) throw new Error(smsResult.error);
+      
+      if (!smsResult.success) {
+        throw new Error(smsResult.error || 'Failed to send SMS');
+      }
 
       setOtpSent(true);
       setResendCooldown(60);
       toast.success('OTP sent to your phone');
     } catch (err: any) {
+      console.error('OTP send error:', err);
       setError(err.message || 'Failed to send OTP');
-      toast.error('Failed to send SMS');
+      toast.error(err.message || 'Failed to send SMS');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (code: string) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const { data, error } = await supabase.rpc('verify_otp', {
+        p_user_id: user?.id,
+        p_code: code,
+        p_purpose: purpose,
+      });
+
+      if (error) throw error;
+
+      if (data && data[0]?.success) {
+        toast.success('Phone verified successfully!');
+        onVerified(data[0].otp_id);
+      } else {
+        setError(data?.[0]?.message || 'Invalid OTP');
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Verification failed');
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
     }
@@ -99,94 +150,33 @@ export default function PhoneOTPVerification({
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
+  };
 
-    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      navigator.clipboard.readText().then(text => {
-        const digits = text.replace(/\D/g, '').slice(0, 6).split('');
-        const newOtp = [...otp];
-        digits.forEach((digit, i) => {
-          if (i < 6) newOtp[i] = digit;
-        });
-        setOtp(newOtp);
-        
-        const lastIndex = Math.min(digits.length - 1, 5);
-        inputRefs.current[lastIndex]?.focus();
-        
-        if (digits.length === 6) handleVerify(digits.join(''));
-      });
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    
+    if (pastedData.length === 6) {
+      const newOtp = pastedData.split('');
+      setOtp(newOtp);
+      handleVerify(pastedData);
     }
   };
 
-  const handleVerify = async (code: string) => {
-    try {
-      setLoading(true);
-      setError('');
-
-      // Use YOUR existing verify function
-      const { data, error: verifyError } = await supabase.rpc('verify_otp', {
-        p_user_id: user?.id,
-        p_code: code,
-        p_purpose: purpose,
-      });
-
-      if (verifyError) throw verifyError;
-
-      if (data && data[0]?.success) {
-        toast.success('Phone verified!');
-        onVerified(data[0].otp_id || 'verified');
-      } else {
-        setError(data?.[0]?.message || 'Invalid OTP');
-        setOtp(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
-      }
-    } catch (err: any) {
-      setError('Failed to verify OTP');
-      toast.error('Verification failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const maskedPhone = phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
-
-  if (!otpSent) {
-    return (
-      <div className="w-full max-w-md mx-auto p-6 text-center space-y-4">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-        <p className="text-muted-foreground">Sending verification code...</p>
-      </div>
-    );
-  }
+  const maskedPhone = phoneNumber 
+    ? phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+    : 'N/A';
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 space-y-6">
-      <div className="text-center space-y-2">
-        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-          <Smartphone className="w-8 h-8 text-primary" />
+    <div className="space-y-4">
+      <div className="text-center">
+        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <Smartphone className="w-6 h-6 text-blue-600" />
         </div>
-        <h2 className="text-2xl font-bold">Phone Verification</h2>
-        <p className="text-muted-foreground text-sm">
-          We've sent a 6-digit code via SMS to<br />
-          <strong>{maskedPhone}</strong>
+        <h3 className="text-lg font-semibold mb-1">Enter Verification Code</h3>
+        <p className="text-sm text-gray-600">
+          We sent a 6-digit code to {maskedPhone}
         </p>
-      </div>
-
-      <div className="flex justify-center gap-2">
-        {otp.map((digit, index) => (
-          <Input
-            key={index}
-            ref={el => (inputRefs.current[index] = el)}
-            type="text"
-            inputMode="numeric"
-            maxLength={1}
-            value={digit}
-            onChange={e => handleChange(index, e.target.value)}
-            onKeyDown={e => handleKeyDown(index, e)}
-            disabled={loading}
-            className="w-12 h-14 text-center text-2xl font-bold"
-          />
-        ))}
       </div>
 
       {error && (
@@ -195,46 +185,55 @@ export default function PhoneOTPVerification({
         </Alert>
       )}
 
-      <div className="space-y-3">
-        <Button
-          onClick={() => handleVerify(otp.join(''))}
-          disabled={otp.some(d => !d) || loading}
-          className="w-full"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Verifying...
-            </>
-          ) : (
-            'Verify Code'
-          )}
-        </Button>
-
-        <div className="flex justify-between items-center">
-          <Button variant="ghost" onClick={onCancel} disabled={loading} size="sm">
-            Cancel
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={handleSendOTP}
-            disabled={loading || resendCooldown > 0}
-            size="sm"
-          >
-            {resendCooldown > 0 ? (
-              `Resend in ${resendCooldown}s`
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Resend Code
-              </>
-            )}
-          </Button>
-        </div>
+      <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+        {otp.map((digit, index) => (
+          <Input
+            key={index}
+            ref={el => inputRefs.current[index] = el}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={digit}
+            onChange={e => handleChange(index, e.target.value)}
+            onKeyDown={e => handleKeyDown(index, e)}
+            className="w-12 h-12 text-center text-xl font-bold"
+            disabled={loading || !otpSent}
+          />
+        ))}
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Code expires in 10 minutes
+      <div className="flex flex-col gap-2">
+        <Button
+          onClick={() => handleVerify(otp.join(''))}
+          disabled={loading || otp.some(d => !d) || !otpSent}
+          className="w-full"
+        >
+          {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+          Verify Code
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={handleSendOTP}
+          disabled={loading || resendCooldown > 0 || !phoneNumber}
+          className="w-full"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+        </Button>
+
+        <Button
+          variant="ghost"
+          onClick={onCancel}
+          disabled={loading}
+          className="w-full"
+        >
+          Cancel
+        </Button>
+      </div>
+
+      <p className="text-xs text-center text-gray-500">
+        Code expires in 10 minutes • Max 5 attempts
       </p>
     </div>
   );
