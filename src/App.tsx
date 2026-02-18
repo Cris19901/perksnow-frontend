@@ -277,8 +277,9 @@ function AppContent() {
     <>
       <Toaster position="top-center" richColors />
 
-      {/* Phone Verification Banner - Added for security */}
+      {/* Phone Verification Banner - TEMPORARILY DISABLED until Termii Sender ID approved
       <PhoneVerificationBanner />
+      */}
 
       {/* Onboarding Flow */}
       {showOnboarding && !checkingOnboarding && (

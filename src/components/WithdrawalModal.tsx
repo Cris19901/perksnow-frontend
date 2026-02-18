@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import PhoneOTPVerification from './PhoneOTPVerification';
+import { OTPVerification } from './OTPVerification';
 
 interface WithdrawalModalProps {
   open: boolean;
@@ -454,8 +454,7 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
             )}
           </div>
         ) : !otpVerified ? (
-          <PhoneOTPVerification
-            phoneNumber={registeredPhone || phoneNumber}
+          <OTPVerification
             purpose="withdrawal"
             onVerified={() => setOtpVerified(true)}
             onCancel={() => onOpenChange(false)}
