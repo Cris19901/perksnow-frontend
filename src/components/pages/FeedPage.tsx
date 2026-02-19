@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../Header';
 import { Stories } from '../Stories';
 import { CreatePost } from '../CreatePost';
 import { Post } from '../Post';
-import { ProductPost } from '../ProductPost';
 import { ReelPost } from '../ReelPost';
-import { ReelsViewerPro } from '../ReelsViewerPro';
+const ReelsViewerPro = lazy(() => import('../ReelsViewerPro').then(m => ({ default: m.ReelsViewerPro })));
 import { ActivityPost } from '../ActivityPost';
 import { Sidebar } from '../Sidebar';
 import { MobileBottomNav } from '../MobileBottomNav';
@@ -45,7 +44,6 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const { user } = useAuth();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [reels, setReels] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,23 +55,26 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const [loadingSubscription, setLoadingSubscription] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
+  const pageRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const lastLoadTimeRef = useRef(0);
   const POSTS_PER_PAGE = 10;
 
   const fetchFeedData = async (isLoadMore = false) => {
     try {
       if (isLoadMore) {
+        if (loadingMoreRef.current) return; // Prevent double-firing
+        loadingMoreRef.current = true;
         setLoadingMore(true);
       } else {
         setLoading(true);
-        setPage(0);
+        pageRef.current = 0;
+        hasMoreRef.current = true;
       }
       setError(null);
 
-      const currentPage = isLoadMore ? page : 0;
+      const currentPage = isLoadMore ? pageRef.current : 0;
       const offset = currentPage * POSTS_PER_PAGE;
       console.log(`🔍 FeedPage: Fetching feed data (page ${currentPage}, offset ${offset})...`);
 
@@ -108,35 +109,10 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       // Check if there are more posts to load
       const hasMorePosts = postsData && postsData.length === POSTS_PER_PAGE;
 
-      console.log('🔍 FeedPage: Fetched posts with images:', postsData);
-
-      // Only fetch products and reels on initial load (not on load more)
-      let productsData: any[] = [];
+      // Only fetch reels on initial load (not on load more)
       let reels: any[] = [];
 
       if (!isLoadMore) {
-        // Fetch products with seller information
-        const { data: fetchedProducts, error: productsError } = await supabase
-          .from('products')
-          .select(`
-            *,
-            users:seller_id (
-              id,
-              username,
-              full_name,
-              avatar_url,
-              subscription_tier,
-              subscription_status,
-              subscription_expires_at
-            )
-          `)
-          .eq('is_available', true)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (productsError) throw productsError;
-        productsData = fetchedProducts || [];
-
         // Fetch reels
         const { data: reelsData, error: reelsError } = await supabase.rpc('get_reels_feed', {
           p_user_id: user?.id || null,
@@ -169,13 +145,6 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
           .order('created_at', { ascending: false })
           .limit(10);
 
-        // Debug logging
-        console.log('📸 FeedPage: Activities fetch result:', {
-          error: activitiesError,
-          count: activitiesData?.length || 0,
-          data: activitiesData
-        });
-
         // Don't throw error if table doesn't exist, just continue without activities
         if (!activitiesError && activitiesData) {
           setActivities(activitiesData);
@@ -202,6 +171,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
 
         return {
           id: post.id,
+          created_at: post.created_at,
           author: {
             name: post.users?.full_name || post.users?.username || 'Unknown User',
             username: `@${post.users?.username || 'unknown'}`,
@@ -209,7 +179,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             isVerified,
           },
           content: post.content,
-          image: post.image_url, // Keep for backwards compatibility
+          image: post.image_url,
           images: images.length > 0 ? images : undefined,
           images_count: post.images_count || 0,
           likes: post.likes_count || 0,
@@ -219,63 +189,44 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
         };
       }) || [];
 
-      // Transform products data to match the ProductPost component format
-      const transformedProducts = productsData?.map((product: any) => {
-        const isVerified = product.users?.subscription_tier === 'pro' &&
-                          product.users?.subscription_status === 'active' &&
-                          (!product.users?.subscription_expires_at || new Date(product.users.subscription_expires_at) > new Date());
-
-        return {
-          id: product.id,
-          author: {
-            name: product.users?.full_name || product.users?.username || 'Unknown Seller',
-            username: `@${product.users?.username || 'unknown'}`,
-            avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-            isVerified,
-          },
-          content: product.description,
-          product: {
-            name: product.title,
-            price: product.price,
-            image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
-            category: product.category || 'General',
-          },
-          likes: product.likes_count || 0,
-          comments: 0,
-          shares: 0,
-          timestamp: formatTimestamp(product.created_at),
-        };
-      }) || [];
-
-      console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts,', transformedProducts.length, 'products, and', reels.length, 'reels');
+      console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts');
 
       if (isLoadMore) {
-        // Append new posts to existing posts
-        setPosts(prev => [...prev, ...transformedPosts]);
-        setPage(prev => prev + 1);
-      } else {
-        // Replace all data on initial load
-        setPosts(transformedPosts);
-        setProducts(transformedProducts);
-        setReels(reels);
-      }
+  // Append new posts to existing posts
+  setPosts(prev => [...prev, ...transformedPosts]);
+  pageRef.current += 1;  // ← INCREMENT PAGE COUNTER
+} else {
+  // Replace all data on initial load
+  setPosts(transformedPosts);
+  setReels(reels);
+  pageRef.current = 1;   // ← RESET TO 1 ON INITIAL LOAD
+}
 
+      // Increment page counter for next load
+      pageRef.current = currentPage + 1;
+      hasMoreRef.current = hasMorePosts;
       setHasMore(hasMorePosts);
+
+      console.log('📊 Feed load complete:', {
+        page: pageRef.current,
+        postsLoaded: transformedPosts.length,
+        hasMore: hasMorePosts,
+        totalPosts: isLoadMore ? posts.length + transformedPosts.length : transformedPosts.length
+      });
     } catch (err: any) {
       console.error('❌ FeedPage: Error fetching feed data:', err);
       setError(err.message || 'Failed to load feed');
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
   };
 
-  // Load more callback for infinite scroll
-  const loadMore = useCallback(() => {
-    if (!loadingMore && hasMore && !loading) {
-      fetchFeedData(true);
-    }
-  }, [loadingMore, hasMore, loading, page]);
+  // Store fetchFeedData in a ref so loadMore always calls the latest version
+  const fetchFeedDataRef = useRef(fetchFeedData);
+  fetchFeedDataRef.current = fetchFeedData;
+
 
   const fetchSubscriptionTier = async () => {
     if (!user) return;
@@ -293,7 +244,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       console.log('📊 FeedPage: Fetched subscription data:', data);
 
       // Check if user has active Pro subscription (any paid tier: pro, daily, weekly)
-      const paidTiers = ['pro', 'daily', 'weekly'];
+      const paidTiers = ['pro', 'daily', 'weekly', 'starter', 'basic'];
       const isPro = paidTiers.includes(data?.subscription_tier)
         && data?.subscription_status === 'active'
         && (!data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date());
@@ -316,32 +267,59 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     }
   }, [user]);
 
-  // Set up Intersection Observer for infinite scroll
+  // Scroll-based infinite loading - fires when user scrolls near bottom
   useEffect(() => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
+    const handleScroll = () => {
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+      const now = Date.now();
+      const timeSinceLastLoad = now - lastLoadTimeRef.current;
 
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const firstEntry = entries[0];
-        if (firstEntry.isIntersecting && hasMore && !loading && !loadingMore) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' }
-    );
+      console.log('📜 Scroll:', {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        distanceFromBottom,
+        loading: loadingMoreRef.current,
+        hasMore: hasMoreRef.current,
+        timeSinceLastLoad
+      });
 
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current);
-    }
+      if (loadingMoreRef.current) {
+        console.log('⏸️ Already loading, skipping');
+        return;
+      }
 
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (!hasMoreRef.current) {
+        console.log('🛑 No more posts, skipping');
+        return;
+      }
+
+      // Cooldown: prevent triggering within 2 seconds of last load
+      if (timeSinceLastLoad < 2000) {
+        console.log('⏱️ Cooldown active (' + Math.ceil((2000 - timeSinceLastLoad) / 1000) + 's remaining)');
+        return;
+      }
+
+      // Trigger if within 500px of bottom (allow slight overshoot)
+      if (distanceFromBottom <= 500 && distanceFromBottom >= -50) {
+        console.log('🔥 Triggering load more! Distance: ' + distanceFromBottom.toFixed(1) + 'px');
+        lastLoadTimeRef.current = now;
+        fetchFeedDataRef.current(true);
+      } else if (distanceFromBottom < -50) {
+        console.log('🚫 Too far past bottom (' + distanceFromBottom.toFixed(1) + 'px)');
       }
     };
-  }, [hasMore, loading, loadingMore, loadMore]);
+
+    console.log('✅ Scroll listener attached');
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      console.log('❌ Scroll listener removed');
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   const handleReelClick = (reelId: string, showComments = false) => {
     setSelectedReelId(reelId);
@@ -349,40 +327,23 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     setShowReelsViewer(true);
   };
 
-  // Mix posts, products, reels, and activities for a varied feed with shuffling
-  const createMixedFeed = () => {
-    const feed: Array<{ type: 'post' | 'product' | 'reel' | 'activity'; data: any }> = [];
+  // Mix posts, reels, and activities for a varied feed
+  const mixedFeed = useMemo(() => {
+    const feed: Array<{ type: 'post' | 'reel' | 'activity'; data: any }> = [];
 
-    // Add all posts
     posts.forEach(post => feed.push({ type: 'post', data: post }));
-
-    // Add all products
-    products.forEach(product => feed.push({ type: 'product', data: product }));
-
-    // Add all reels
     reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
-
-    // Add all activities
     activities.forEach(activity => feed.push({ type: 'activity', data: activity }));
 
-    // Sort by created_at first
-    const sortedFeed = feed.sort((a, b) => {
+    // Sort by created_at — most recent first
+    feed.sort((a, b) => {
       const dateA = a.data.created_at ? new Date(a.data.created_at).getTime() : 0;
       const dateB = b.data.created_at ? new Date(b.data.created_at).getTime() : 0;
-      return dateB - dateA; // Most recent first
+      return dateB - dateA;
     });
 
-    // Shuffle algorithm (Fisher-Yates) - randomizes feed on each render/refresh
-    const shuffledFeed = [...sortedFeed];
-    for (let i = shuffledFeed.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledFeed[i], shuffledFeed[j]] = [shuffledFeed[j], shuffledFeed[i]];
-    }
-
-    return shuffledFeed;
-  };
-
-  const mixedFeed = createMixedFeed();
+    return feed;
+  }, [posts, reels, activities]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -393,7 +354,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
         currentPage="feed"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-28 md:pb-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-40 md:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 sm:gap-6">
           {/* Main Content */}
           <div className="space-y-4 sm:space-y-6">
@@ -503,17 +464,15 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                     <p className="text-gray-600">No posts yet. Be the first to share something!</p>
                   </div>
                 )}
-                {mixedFeed.map((item, index) => {
+                {mixedFeed.map((item) => {
                   if (item.type === 'post') {
-                    return <Post key={`post-${item.data.id}-${index}`} {...item.data} />;
-                  } else if (item.type === 'product') {
-                    return <ProductPost key={`product-${item.data.id}-${index}`} {...item.data} onAddToCart={onAddToCart} />;
+                    return <Post key={`post-${item.data.id}`} {...item.data} onDelete={() => setPosts(prev => prev.filter(p => p.id !== item.data.id))} />;
                   } else if (item.type === 'reel') {
-                    return <ReelPost key={`reel-${item.data.reel_id}-${index}`} {...item.data} onReelClick={handleReelClick} />;
+                    return <ReelPost key={`reel-${item.data.reel_id}`} {...item.data} onReelClick={handleReelClick} />;
                   } else if (item.type === 'activity') {
                     return (
                       <ActivityPost
-                        key={`activity-${item.data.id}-${index}`}
+                        key={`activity-${item.data.id}`}
                         id={item.data.id}
                         user_id={item.data.user_id}
                         user={{
@@ -534,12 +493,24 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                   return null;
                 })}
 
-                {/* Infinite Scroll Trigger / Load More */}
-                <div ref={loadMoreRef} className="py-4">
+                {/* Load More Section */}
+                <div className="py-6">
                   {loadingMore && (
                     <div className="flex items-center justify-center gap-2 text-gray-500">
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Loading more posts...</span>
+                    </div>
+                  )}
+                  {!loadingMore && hasMore && mixedFeed.length > 0 && (
+                    <div className="text-center">
+                      <Button
+                        onClick={() => fetchFeedData(true)}
+                        variant="outline"
+                        size="lg"
+                        className="w-full max-w-md"
+                      >
+                        Load More Posts
+                      </Button>
                     </div>
                   )}
                   {!hasMore && mixedFeed.length > 0 && (
@@ -564,18 +535,20 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav currentPage="feed" onNavigate={onNavigate} />
 
-      {/* Reels Viewer */}
+      {/* Reels Viewer (lazy loaded) */}
       {showReelsViewer && (
-        <ReelsViewerPro
-          initialReelId={selectedReelId}
-          openComments={openReelComments}
-          onClose={() => {
-            setShowReelsViewer(false);
-            setSelectedReelId(undefined);
-            setOpenReelComments(false);
-            fetchFeedData(); // Refresh feed to get updated counts
-          }}
-        />
+        <Suspense fallback={<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"><Loader2 className="w-8 h-8 animate-spin text-white" /></div>}>
+          <ReelsViewerPro
+            initialReelId={selectedReelId}
+            openComments={openReelComments}
+            onClose={() => {
+              setShowReelsViewer(false);
+              setSelectedReelId(undefined);
+              setOpenReelComments(false);
+              fetchFeedData(); // Refresh feed to get updated counts
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
