@@ -375,8 +375,12 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange} modal>
+      <DialogContent 
+        className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-green-600" />
