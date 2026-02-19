@@ -33,6 +33,7 @@ import PaymentCallbackPage from './components/pages/PaymentCallbackPage';
 import PaymentHistoryPage from './components/pages/PaymentHistoryPage';
 import { ReferralDashboardPage } from './components/pages/ReferralDashboardPage';
 import { WithdrawPage } from './components/pages/WithdrawPage';
+import { VerifyWithdrawalPage } from './components/pages/VerifyWithdrawalPage';
 import DiagnosticPage from './pages/DiagnosticPage';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
@@ -471,6 +472,10 @@ function AppContent() {
               <WithdrawPage />
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/verify-withdrawal"
+          element={<VerifyWithdrawalPage />}
         />
         <Route
           path="/admin"

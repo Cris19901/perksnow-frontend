@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { OTPVerification } from './OTPVerification';
 
 interface WithdrawalModalProps {
   open: boolean;
@@ -50,7 +49,6 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
   const [ineligibilityReason, setIneligibilityReason] = useState<string>('');
   const [maxWithdrawalPoints, setMaxWithdrawalPoints] = useState<number>(999999999);
   const [withdrawalCount, setWithdrawalCount] = useState<number>(0);
-  const [otpVerified, setOtpVerified] = useState(false);
   const [registeredPhone, setRegisteredPhone] = useState<string | null>(null);
 
   const points = parseInt(pointsToWithdraw) || 0;
@@ -237,7 +235,6 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
     setBankName('');
     setCountry('Nigeria');
     setNotes('');
-    setOtpVerified(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -324,8 +321,8 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
         accountDetails.bankName = bankName.trim();
       }
 
-      // Create withdrawal request
-      const { error } = await supabase
+      // Create withdrawal request with 'unverified' status
+      const { data: withdrawalData, error: withdrawalError } = await supabase
         .from('wallet_withdrawals')
         .insert({
           user_id: user.id,
@@ -336,10 +333,91 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
           account_number: accountNumber.trim(),
           account_name: accountName.trim(),
           user_notes: notes.trim() || null,
-          status: 'pending'
+          status: 'unverified'  // Changed from 'pending'
+        })
+        .select()
+        .single();
+
+      if (withdrawalError) throw withdrawalError;
+
+      // Generate verification token
+      const { data: tokenData, error: tokenError } = await supabase
+        .rpc('generate_withdrawal_verification_token', {
+          p_user_id: user.id,
+          p_withdrawal_id: withdrawalData.id
         });
 
-      if (error) throw error;
+      if (tokenError) {
+        console.error('Token generation error:', tokenError);
+        // If token generation fails, still allow withdrawal but mark as pending
+        await supabase
+          .from('wallet_withdrawals')
+          .update({ status: 'pending' })
+          .eq('id', withdrawalData.id);
+        
+        toast.success('Withdrawal request submitted! Admin will process it shortly.');
+      } else {
+        // Send verification email
+        const verificationUrl = `${window.location.origin}/verify-withdrawal?token=${tokenData}`;
+        
+        try {
+          const { sendEmail } = await import('@/lib/email');
+          await sendEmail({
+            to: email.trim(),
+            subject: 'Verify Your Withdrawal Request - LavLay',
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                  .content { background: #f7f7f7; padding: 30px; }
+                  .button { background: #7c3aed; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 20px 0; }
+                  .details { background: white; padding: 15px; border-radius: 6px; margin: 20px 0; }
+                  .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h1>🔐 Verify Your Withdrawal</h1>
+                  </div>
+                  <div class="content">
+                    <p>Hello,</p>
+                    <p>You requested to withdraw <strong>${points.toLocaleString()} points</strong> (${currencyAmount} ${selectedCurrency}) from your LavLay account.</p>
+                    
+                    <div class="details">
+                      <p><strong>Withdrawal Details:</strong></p>
+                      <p>Amount: ${points.toLocaleString()} points (${currencyAmount} ${selectedCurrency})</p>
+                      <p>Method: ${withdrawalMethod === 'bank' ? 'Bank Transfer' : 'Opay'}</p>
+                      <p>Account: ${accountName.trim()}</p>
+                    </div>
+                    
+                    <p><strong>Click the button below to confirm this withdrawal:</strong></p>
+                    <p style="text-align: center;">
+                      <a href="${verificationUrl}" class="button">✅ Verify Withdrawal</a>
+                    </p>
+                    
+                    <p><small>⏰ This link will expire in 1 hour.</small></p>
+                    <p><small>⚠️ If you didn't request this withdrawal, please ignore this email and contact support immediately.</small></p>
+                  </div>
+                  <div class="footer">
+                    <p>© ${new Date().getFullYear()} LavLay. All rights reserved.</p>
+                  </div>
+                </div>
+              </body>
+              </html>
+            `
+          });
+          
+          toast.success('✅ Verification email sent! Check your inbox to confirm your withdrawal.');
+        } catch (emailError) {
+          console.error('Email send error:', emailError);
+          toast.success('Withdrawal request submitted! Admin will process it shortly.');
+        }
+      }
 
       // Record bank account usage for cooldown tracking
       await supabase.rpc('record_bank_account_usage', {
@@ -348,7 +426,6 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
         p_bank_name: withdrawalMethod === 'bank' ? bankName.trim() : null,
       });
 
-      toast.success('Withdrawal request submitted successfully! You will be notified once processed.');
       resetForm();
       onOpenChange(false);
 
@@ -457,12 +534,6 @@ export function WithdrawalModal({ open, onOpenChange, currentBalance, maturedBal
               </>
             )}
           </div>
-        ) : !otpVerified ? (
-          <OTPVerification
-            purpose="withdrawal"
-            onVerified={() => setOtpVerified(true)}
-            onCancel={() => onOpenChange(false)}
-          />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Current Balance */}
