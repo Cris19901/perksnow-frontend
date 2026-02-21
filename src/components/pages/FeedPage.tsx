@@ -337,13 +337,18 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   };
 
   // Mix posts, reels, and activities for a varied feed
-  // FIXED: Remove useMemo to ensure recalculation on every render
+  // FIXED: Only show reels/activities on first page to prevent them from sticking at bottom
   const mixedFeed = (() => {
     const feed: Array<{ type: 'post' | 'reel' | 'activity'; data: any }> = [];
 
+    // Only include reels/activities on first page (when posts.length <= 10)
+    if (posts.length <= 10) {
+      reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
+      activities.forEach(activity => feed.push({ type: 'activity', data: activity }));
+    }
+    
+    // Always include posts
     posts.forEach(post => feed.push({ type: 'post', data: post }));
-    reels.forEach(reel => feed.push({ type: 'reel', data: reel }));
-    activities.forEach(activity => feed.push({ type: 'activity', data: activity }));
 
     // Sort by created_at — most recent first
     feed.sort((a, b) => {
