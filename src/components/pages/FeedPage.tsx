@@ -59,6 +59,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const lastLoadTimeRef = useRef(0);
+  const initialLoadDone = useRef(false); // ← ADDED: Prevents auth re-trigger
   const POSTS_PER_PAGE = 10;
 
   const fetchFeedData = async (isLoadMore = false) => {
@@ -68,6 +69,11 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
         loadingMoreRef.current = true;
         setLoadingMore(true);
       } else {
+        // ← ADDED: Only reset if we truly have no posts
+        if (posts.length > 0) {
+          console.warn('⚠️ Skipping initial load - posts already exist');
+          return;
+        }
         setLoading(true);
         pageRef.current = 0;
         hasMoreRef.current = true;
@@ -192,18 +198,16 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       console.log('✅ FeedPage: Loaded', transformedPosts.length, 'posts');
 
       if (isLoadMore) {
-  // Append new posts to existing posts
-  setPosts(prev => [...prev, ...transformedPosts]);
-  pageRef.current += 1;  // ← INCREMENT PAGE COUNTER
-} else {
-  // Replace all data on initial load
-  setPosts(transformedPosts);
-  setReels(reels);
-  pageRef.current = 1;   // ← RESET TO 1 ON INITIAL LOAD
-}
+        // Append new posts to existing posts
+        setPosts(prev => [...prev, ...transformedPosts]);
+        pageRef.current += 1; // ← FIXED: Increment page
+      } else {
+        // Replace all data on initial load
+        setPosts(transformedPosts);
+        setReels(reels);
+        pageRef.current = 1; // ← FIXED: Set to 1 after initial load
+      }
 
-      // Increment page counter for next load
-      pageRef.current = currentPage + 1;
       hasMoreRef.current = hasMorePosts;
       setHasMore(hasMorePosts);
 
@@ -260,8 +264,13 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     }
   };
 
+  // ← FIXED: Only fetch on first mount, not on every user change
   useEffect(() => {
-    fetchFeedData();
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      fetchFeedData();
+    }
+    
     if (user) {
       fetchSubscriptionTier();
     }
