@@ -337,7 +337,8 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
   };
 
   // Mix posts, reels, and activities for a varied feed
-  const mixedFeed = useMemo(() => {
+  // FIXED: Remove useMemo to ensure recalculation on every render
+  const mixedFeed = (() => {
     const feed: Array<{ type: 'post' | 'reel' | 'activity'; data: any }> = [];
 
     posts.forEach(post => feed.push({ type: 'post', data: post }));
@@ -351,8 +352,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       return dateB - dateA;
     });
 
+    console.log('🔍 MixedFeed:', feed.length, 'items (', posts.length, 'posts,', reels.length, 'reels,', activities.length, 'activities)');
     return feed;
-  }, [posts, reels, activities]);
+  })();
 
   return (
     <div className="min-h-screen bg-gray-50">
