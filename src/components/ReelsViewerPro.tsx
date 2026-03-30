@@ -140,17 +140,44 @@ export function ReelsViewerPro({ initialReelId, openComments = false, onClose }:
     if (!user) return;
 
     try {
-      await supabase.from('reel_views').insert({
+      // First check if view already exists
+      const { data: existingView } = await supabase
+        .from('reel_views')
+        .select('id')
+        .eq('reel_id', reelId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      // If view already exists, don't insert again
+      if (existingView) {
+        console.log('View already tracked for this reel');
+        return;
+      }
+
+      // Insert new view
+      const { error } = await supabase.from('reel_views').insert({
         reel_id: reelId,
         user_id: user.id,
+        viewed_at: new Date().toISOString(),
       });
 
-      // Update local count
+      if (error) {
+        // Handle unique constraint violation gracefully
+        if (error.code === '23505') {
+          console.log('View already exists (constraint violation)');
+          return;
+        }
+        console.error('Error tracking view:', error);
+        return;
+      }
+
+      // Only update local count if view was newly added
       setReels(prev =>
         prev.map(r =>
           r.reel_id === reelId ? { ...r, views_count: r.views_count + 1 } : r
         )
       );
+      console.log('View tracked successfully for reel:', reelId);
     } catch (error: any) {
       console.error('Error tracking view:', error);
     }

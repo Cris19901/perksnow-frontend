@@ -57,41 +57,65 @@ serve(async (req) => {
       const metadata = paystackData.data.metadata || {}
       console.log('Payment metadata:', JSON.stringify(metadata))
 
-      const subscriptionId = metadata.subscription_id
-      const userId = metadata.user_id
+      // Use let so we can update from fallback if needed
+      let subscriptionId = metadata.subscription_id
+      let userId = metadata.user_id
+      let planName = metadata.plan_name || 'pro'
       const billingCycle = metadata.billing_cycle || 'monthly'
-      // Use the plan name directly (daily, weekly, pro) - the frontend checks for all paid tiers
-      const planName = metadata.plan_name || 'pro'
       const planTier = planName.toLowerCase()
 
-      console.log('Extracted IDs - subscriptionId:', subscriptionId, 'userId:', userId)
+      console.log('Extracted IDs from metadata - subscriptionId:', subscriptionId, 'userId:', userId)
 
+      // CRITICAL: If metadata is missing IDs, get them from the payment_transactions table
       if (!subscriptionId || !userId) {
-        console.error('Missing subscription_id or user_id in metadata')
-        // Try to get from transaction as fallback
+        console.log('Missing IDs in metadata, doing fallback lookup by reference:', reference)
         const { data: transaction, error: txFetchError } = await supabase
           .from('payment_transactions')
           .select('subscription_id, user_id')
           .eq('reference', reference)
           .single()
 
-        console.log('Fallback transaction lookup:', transaction, 'Error:', txFetchError)
+        if (txFetchError) {
+          console.error('Fallback transaction lookup failed:', txFetchError)
+        } else if (transaction) {
+          console.log('Found transaction:', transaction)
+          // Use the transaction values if metadata was missing them
+          subscriptionId = subscriptionId || transaction.subscription_id
+          userId = userId || transaction.user_id
+          console.log('Using fallback IDs - subscriptionId:', subscriptionId, 'userId:', userId)
+        }
+
+        // If we still don't have the IDs, also try to get plan info from subscriptions table
+        if (subscriptionId && !planName) {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('plan_name')
+            .eq('id', subscriptionId)
+            .single()
+          if (subData) {
+            planName = subData.plan_name
+            console.log('Got plan name from subscription:', planName)
+          }
+        }
       }
 
       // Calculate expiry date based on plan tier
       const expiresAt = new Date()
       if (planTier === 'daily') {
         expiresAt.setDate(expiresAt.getDate() + 1)
+      } else if (planTier === 'starter') {
+        // Starter plan = 15 days
+        expiresAt.setDate(expiresAt.getDate() + 15)
       } else if (planTier === 'weekly') {
         expiresAt.setDate(expiresAt.getDate() + 7)
       } else if (billingCycle === 'yearly') {
         expiresAt.setFullYear(expiresAt.getFullYear() + 1)
       } else {
-        // Default to monthly for 'pro' plan
+        // Default to monthly for 'basic' and 'pro' plans (30 days)
         expiresAt.setMonth(expiresAt.getMonth() + 1)
       }
 
-      console.log('Activating subscription:', subscriptionId, 'for user:', userId)
+      console.log('Activating subscription:', subscriptionId, 'for user:', userId, 'plan:', planTier)
       console.log('Expires at:', expiresAt.toISOString())
 
       // Update payment transaction

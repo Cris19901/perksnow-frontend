@@ -28,16 +28,20 @@ serve(async (req) => {
     const body = await req.text()
     const signature = req.headers.get('x-paystack-signature')
 
-    // Verify webhook signature
-    if (signature) {
-      const hash = createHmac('sha512', PAYSTACK_SECRET_KEY)
-        .update(body)
-        .digest('hex')
+    // SECURITY: Signature verification is MANDATORY
+    if (!signature) {
+      console.error('Missing webhook signature - rejecting request')
+      return new Response('Missing signature', { status: 401 })
+    }
 
-      if (hash !== signature) {
-        console.error('Invalid webhook signature')
-        return new Response('Invalid signature', { status: 401 })
-      }
+    // Verify webhook signature
+    const hash = createHmac('sha512', PAYSTACK_SECRET_KEY)
+      .update(body)
+      .digest('hex')
+
+    if (hash !== signature) {
+      console.error('Invalid webhook signature')
+      return new Response('Invalid signature', { status: 401 })
     }
 
     const event = JSON.parse(body)
@@ -71,19 +75,43 @@ serve(async (req) => {
         .single()
 
       if (transaction) {
-        // Calculate expiry date based on billing cycle
-        const expiresAt = new Date()
+        // Get plan name from metadata or lookup from subscription
+        let planName = metadata?.plan_name
         const billingCycle = metadata?.billing_cycle || 'monthly'
 
-        if (billingCycle === 'yearly') {
+        // If plan name missing from metadata, get from subscription record
+        if (!planName && transaction.subscription_id) {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('plan_name')
+            .eq('id', transaction.subscription_id)
+            .single()
+          if (subData) {
+            planName = subData.plan_name
+          }
+        }
+
+        const planTier = (planName || 'pro').toLowerCase()
+
+        // Calculate expiry date based on plan tier
+        const expiresAt = new Date()
+        if (planTier === 'daily') {
+          expiresAt.setDate(expiresAt.getDate() + 1)
+        } else if (planTier === 'starter') {
+          expiresAt.setDate(expiresAt.getDate() + 15)
+        } else if (planTier === 'weekly') {
+          expiresAt.setDate(expiresAt.getDate() + 7)
+        } else if (billingCycle === 'yearly') {
           expiresAt.setFullYear(expiresAt.getFullYear() + 1)
         } else {
+          // Default to monthly (30 days) for 'basic' and 'pro'
           expiresAt.setMonth(expiresAt.getMonth() + 1)
         }
 
         console.log('Activating subscription:', {
           subscription_id: transaction.subscription_id,
           user_id: transaction.user_id,
+          plan_tier: planTier,
           expires_at: expiresAt.toISOString(),
         })
 
@@ -100,23 +128,37 @@ serve(async (req) => {
 
         if (subError) {
           console.error('Error updating subscription:', subError)
+        } else {
+          console.log('Subscription record updated successfully')
         }
 
-        // Update user subscription status
+        // Update user subscription status + sustainability flags
+        const userUpdateData: Record<string, any> = {
+          subscription_tier: planTier,
+          subscription_status: 'active',
+          subscription_expires_at: expiresAt.toISOString(),
+          has_ever_subscribed: true,
+        }
+
+        // Mark daily plan as used (one-time only)
+        if (planTier === 'daily') {
+          userUpdateData.has_used_daily_plan = true
+        }
+
         const { error: userError } = await supabase
           .from('users')
-          .update({
-            subscription_tier: metadata?.plan_name || 'pro',
-            subscription_status: 'active',
-            subscription_expires_at: expiresAt.toISOString(),
-          })
+          .update(userUpdateData)
           .eq('id', transaction.user_id)
 
         if (userError) {
           console.error('Error updating user:', userError)
+        } else {
+          console.log('User subscription updated successfully')
         }
 
         console.log('Subscription activated successfully!')
+      } else {
+        console.error('No transaction found for reference:', reference)
       }
     } else if (event.event === 'charge.failed') {
       const { reference } = event.data

@@ -4,332 +4,235 @@ import { config } from '../config';
 import { supabase } from '../utils/supabase';
 import { logger } from '../utils/logger';
 
-/**
- * Verify Paystack webhook signature
- */
-export const verifyPaystackSignature = (req: Request): boolean => {
+function verifySignature(req: Request): boolean {
   const hash = crypto
     .createHmac('sha512', config.paystack.webhookSecret)
     .update(JSON.stringify(req.body))
     .digest('hex');
-
   return hash === req.headers['x-paystack-signature'];
-};
+}
 
-/**
- * Handle Paystack webhook events
- */
 export const handlePaystackWebhook = async (req: Request, res: Response) => {
-  try {
-    // Verify signature
-    if (!verifyPaystackSignature(req)) {
-      logger.warn('Invalid Paystack webhook signature');
-      return res.status(400).json({ error: 'Invalid signature' });
+  if (!verifySignature(req)) {
+    logger.warn('Invalid Paystack webhook signature');
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  // Acknowledge immediately — Paystack retries if it doesn't get 200 quickly
+  res.status(200).json({ received: true });
+
+  const event = req.body as { event: string; data: Record<string, unknown> };
+  logger.info(`Paystack webhook: ${event.event}`);
+
+  // Idempotency: skip if this event was already processed
+  const eventId = (event.data.id as string | number)?.toString();
+  if (eventId) {
+    const { data: existing } = await supabase
+      .from('payment_webhooks')
+      .select('id')
+      .eq('provider', 'paystack')
+      .eq('event_id', eventId)
+      .eq('event_type', event.event)
+      .maybeSingle();
+    if (existing) {
+      logger.info(`Skipping duplicate Paystack event ${event.event} id=${eventId}`);
+      return;
     }
+  }
 
-    const event = req.body;
+  // Log the event
+  await supabase.from('payment_webhooks').insert({
+    provider: 'paystack',
+    event_type: event.event,
+    event_id: eventId,
+    payload: event,
+  }).then(({ error }) => {
+    if (error) logger.warn('Failed to log webhook event:', error);
+  });
 
-    logger.info(`Paystack webhook received: ${event.event}`);
-
-    // Handle different event types
+  try {
     switch (event.event) {
       case 'charge.success':
         await handleChargeSuccess(event.data);
         break;
-
       case 'transfer.success':
         await handleTransferSuccess(event.data);
         break;
-
       case 'transfer.failed':
         await handleTransferFailed(event.data);
         break;
-
       case 'transfer.reversed':
         await handleTransferReversed(event.data);
         break;
-
       default:
         logger.info(`Unhandled Paystack event: ${event.event}`);
     }
-
-    res.status(200).json({ received: true });
-  } catch (error) {
-    logger.error('Paystack webhook error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+  } catch (err) {
+    logger.error(`Error processing Paystack ${event.event}:`, err);
   }
 };
 
-/**
- * Handle successful payment
- */
-async function handleChargeSuccess(data: any) {
-  const reference = data.reference;
-  const amount = data.amount; // in kobo
-  const metadata = data.metadata;
+async function handleChargeSuccess(data: Record<string, unknown>) {
+  const reference = data.reference as string;
+  const metadata = data.metadata as Record<string, unknown> | undefined;
 
-  logger.info(`Processing successful charge: ${reference}`);
+  logger.info(`Processing charge.success: ${reference}`);
 
-  // Find the payment transaction
-  const { data: transaction, error: fetchError } = await supabase
+  // Find the transaction (check both tables for compatibility)
+  const { data: transaction } = await supabase
     .from('payment_transactions')
     .select('*')
     .eq('reference', reference)
-    .single();
+    .maybeSingle()
+    .then(async (res) => {
+      if (res.data) return res;
+      return supabase.from('transactions').select('*').eq('reference', reference).maybeSingle();
+    });
 
-  if (fetchError || !transaction) {
-    logger.error(`Payment transaction not found: ${reference}`);
+  if (!transaction) {
+    logger.error(`No transaction found for reference: ${reference}`);
     return;
   }
 
-  // Update payment transaction status
-  const { error: updateError } = await supabase
-    .from('payment_transactions')
+  // Skip if already processed (idempotency at the transaction level)
+  if (transaction.status === 'completed' || transaction.status === 'success') {
+    logger.info(`Transaction ${reference} already processed, skipping`);
+    return;
+  }
+
+  // Update transaction
+  const table = transaction.subscription_id != null ? 'payment_transactions' : 'transactions';
+  await supabase
+    .from(table)
     .update({
       status: 'success',
       provider_response: data,
       webhook_data: data,
       webhook_received_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq('id', transaction.id);
 
-  if (updateError) {
-    logger.error('Failed to update payment transaction:', updateError);
-    return;
-  }
-
-  // Process based on transaction type
+  // Activate subscription if applicable
   if (transaction.subscription_id) {
-    // This is a subscription payment
-    await activateSubscription(transaction.subscription_id, reference);
-  } else if (metadata?.type === 'product_purchase') {
-    await processProductPurchase(transaction, metadata);
-  } else if (metadata?.type === 'wallet_topup') {
-    await processWalletTopup(transaction);
+    await activateSubscription(transaction.subscription_id as string, reference);
+  } else {
+    const type = (metadata?.type ?? transaction.metadata?.type) as string | undefined;
+    if (type === 'subscription') {
+      await activateSubscriptionFromMetadata(transaction, metadata);
+    } else if (type === 'wallet_topup') {
+      await processWalletTopup(transaction);
+    }
   }
 }
 
-/**
- * Activate subscription after successful payment
- */
 async function activateSubscription(subscriptionId: string, paymentReference: string) {
   logger.info(`Activating subscription: ${subscriptionId}`);
-
-  try {
-    // Call the Supabase function to activate subscription
-    const { data, error } = await supabase.rpc('activate_subscription', {
-      p_subscription_id: subscriptionId,
-      p_payment_reference: paymentReference,
-    });
-
-    if (error) {
-      logger.error('Failed to activate subscription:', error);
-      return;
-    }
-
-    logger.info(`Subscription activated successfully: ${subscriptionId}`);
-
-    // Get subscription details for user notification
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('user_id, plan_name, expires_at')
-      .eq('id', subscriptionId)
-      .single();
-
-    if (subscription) {
-      logger.info(
-        `User ${subscription.user_id} upgraded to ${subscription.plan_name} until ${subscription.expires_at}`
-      );
-
-      // TODO: Send email notification to user
-      // await sendSubscriptionActivatedEmail(subscription.user_id, subscription);
-    }
-  } catch (error) {
-    logger.error('Subscription activation error:', error);
-  }
-}
-
-/**
- * Process product purchase
- */
-async function processProductPurchase(transaction: any, metadata: any) {
-  const productId = metadata.product_id;
-  const sellerId = metadata.seller_id;
-  const buyerId = transaction.user_id;
-  const amount = transaction.amount;
-
-  logger.info(`Processing product purchase: ${productId}`);
-
-  // Get revenue config
-  const { data: revenueConfig } = await supabase
-    .from('revenue_config')
-    .select('*')
-    .eq('category', 'product_sale')
-    .single();
-
-  if (!revenueConfig) {
-    logger.error('Revenue config not found');
-    return;
-  }
-
-  // Calculate platform fee and seller earnings
-  const platformFee = (amount * revenueConfig.platform_percentage) / 100;
-  const sellerEarnings = (amount * revenueConfig.user_percentage) / 100;
-
-  // Create earnings record for seller
-  const { error: earningsError } = await supabase.from('earnings').insert({
-    user_id: sellerId,
-    type: 'product_sale',
-    amount: sellerEarnings,
-    platform_fee: platformFee,
-    reference: transaction.reference,
-    metadata: {
-      product_id: productId,
-      buyer_id: buyerId,
-      transaction_id: transaction.id,
-    },
+  const { error } = await supabase.rpc('activate_subscription', {
+    p_subscription_id: subscriptionId,
+    p_payment_reference: paymentReference,
   });
-
-  if (earningsError) {
-    logger.error('Failed to create earnings:', earningsError);
-    return;
-  }
-
-  // Update seller's wallet
-  const { error: walletError } = await supabase.rpc('increment_wallet_balance', {
-    p_user_id: sellerId,
-    p_amount: sellerEarnings,
-  });
-
-  if (walletError) {
-    logger.error('Failed to update wallet:', walletError);
-  }
-
-  logger.info(`Product purchase processed: Seller earned ₦${sellerEarnings / 100}`);
-}
-
-/**
- * Process wallet top-up
- */
-async function processWalletTopup(transaction: any) {
-  const userId = transaction.user_id;
-  const amount = transaction.amount;
-
-  logger.info(`Processing wallet topup for user ${userId}: ₦${amount / 100}`);
-
-  const { error } = await supabase.rpc('increment_wallet_balance', {
-    p_user_id: userId,
-    p_amount: amount,
-  });
-
   if (error) {
-    logger.error('Failed to update wallet:', error);
-  } else {
-    logger.info(`Wallet topped up: User ${userId} + ₦${amount / 100}`);
+    logger.error('Failed to activate subscription via RPC:', error);
+    return;
   }
+  logger.info(`Subscription activated: ${subscriptionId}`);
 }
 
-/**
- * Handle successful transfer (withdrawal)
- */
-async function handleTransferSuccess(data: any) {
-  const reference = data.reference;
+async function activateSubscriptionFromMetadata(
+  transaction: Record<string, unknown>,
+  metadata: Record<string, unknown> | undefined
+) {
+  const userId = transaction.user_id as string;
+  const tierId = (metadata?.tier_id ?? metadata?.plan_name) as string | undefined;
+  if (!tierId) {
+    logger.warn('No tier_id in metadata for subscription activation');
+    return;
+  }
 
-  logger.info(`Processing successful transfer: ${reference}`);
+  const { data: tier } = await supabase
+    .from('membership_tiers')
+    .select('duration_months')
+    .eq('id', tierId)
+    .maybeSingle();
 
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setMonth(endDate.getMonth() + (tier?.duration_months ?? 1));
+
+  const { error } = await supabase.from('subscriptions').upsert({
+    user_id: userId,
+    tier_id: tierId,
+    status: 'active',
+    starts_at: now.toISOString(),
+    ends_at: endDate.toISOString(),
+    auto_renew: (metadata?.auto_renew as boolean) ?? true,
+    payment_method: 'paystack',
+  });
+
+  if (error) logger.error('Failed to upsert subscription:', error);
+  else logger.info(`Subscription activated for user ${userId}, tier ${tierId}`);
+}
+
+async function processWalletTopup(transaction: Record<string, unknown>) {
+  const userId = transaction.user_id as string;
+  const amount = transaction.amount as number;
+  logger.info(`Processing wallet topup: user ${userId}, ₦${amount / 100}`);
+  const { error } = await supabase.rpc('increment_wallet_balance', { p_user_id: userId, p_amount: amount });
+  if (error) logger.error('Failed to update wallet:', error);
+  else logger.info(`Wallet topped up: user ${userId} + ₦${amount / 100}`);
+}
+
+async function handleTransferSuccess(data: Record<string, unknown>) {
+  const reference = data.reference as string;
+  logger.info(`Transfer success: ${reference}`);
   const { error } = await supabase
     .from('withdrawals')
-    .update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      gateway_response: data.reason || 'Transfer successful',
-    })
+    .update({ status: 'completed', completed_at: new Date().toISOString(), gateway_response: 'Transfer successful' })
     .eq('reference', reference);
-
-  if (error) {
-    logger.error('Failed to update withdrawal:', error);
-  } else {
-    logger.info(`Withdrawal completed: ${reference}`);
-  }
+  if (error) logger.error('Failed to update withdrawal:', error);
 }
 
-/**
- * Handle failed transfer
- */
-async function handleTransferFailed(data: any) {
-  const reference = data.reference;
-
-  logger.info(`Processing failed transfer: ${reference}`);
-
-  // Update withdrawal status
-  const { data: withdrawal, error: fetchError } = await supabase
+async function handleTransferFailed(data: Record<string, unknown>) {
+  const reference = data.reference as string;
+  logger.info(`Transfer failed: ${reference}`);
+  const { data: withdrawal } = await supabase
     .from('withdrawals')
-    .select('*')
+    .select('id, user_id, amount, status')
     .eq('reference', reference)
-    .single();
+    .maybeSingle();
+  if (!withdrawal) { logger.error(`Withdrawal not found: ${reference}`); return; }
+  if (withdrawal.status === 'failed') return; // already handled
 
-  if (fetchError || !withdrawal) {
-    logger.error(`Withdrawal not found: ${reference}`);
-    return;
-  }
-
-  // Mark as failed
-  const { error: updateError } = await supabase
+  await supabase
     .from('withdrawals')
-    .update({
-      status: 'failed',
-      gateway_response: data.reason || 'Transfer failed',
-    })
+    .update({ status: 'failed', gateway_response: (data.reason as string) || 'Transfer failed' })
     .eq('id', withdrawal.id);
 
-  if (updateError) {
-    logger.error('Failed to update withdrawal:', updateError);
-    return;
-  }
-
-  // Refund to wallet
-  const { error: walletError } = await supabase.rpc('increment_wallet_balance', {
+  // Refund
+  const { error } = await supabase.rpc('increment_wallet_balance', {
     p_user_id: withdrawal.user_id,
     p_amount: withdrawal.amount,
   });
-
-  if (walletError) {
-    logger.error('Failed to refund wallet:', walletError);
-  } else {
-    logger.info(`Withdrawal failed, amount refunded: ₦${withdrawal.amount / 100}`);
-  }
+  if (error) logger.error('Failed to refund wallet:', error);
+  else logger.info(`Withdrawal failed, ₦${withdrawal.amount / 100} refunded to user ${withdrawal.user_id}`);
 }
 
-/**
- * Handle reversed transfer
- */
-async function handleTransferReversed(data: any) {
-  const reference = data.reference;
-
-  logger.info(`Processing reversed transfer: ${reference}`);
-
+async function handleTransferReversed(data: Record<string, unknown>) {
+  const reference = data.reference as string;
+  logger.info(`Transfer reversed: ${reference}`);
   const { data: withdrawal } = await supabase
     .from('withdrawals')
-    .select('*')
+    .select('id, user_id, amount, status')
     .eq('reference', reference)
-    .single();
+    .maybeSingle();
+  if (!withdrawal) return;
+  if (withdrawal.status === 'reversed') return; // already handled
 
-  if (withdrawal) {
-    await supabase
-      .from('withdrawals')
-      .update({
-        status: 'reversed',
-        gateway_response: 'Transfer reversed',
-      })
-      .eq('id', withdrawal.id);
+  await supabase
+    .from('withdrawals')
+    .update({ status: 'reversed', gateway_response: 'Transfer reversed' })
+    .eq('id', withdrawal.id);
 
-    // Refund to wallet
-    await supabase.rpc('increment_wallet_balance', {
-      p_user_id: withdrawal.user_id,
-      p_amount: withdrawal.amount,
-    });
-
-    logger.info(`Transfer reversed, amount refunded: ₦${withdrawal.amount / 100}`);
-  }
+  await supabase.rpc('increment_wallet_balance', { p_user_id: withdrawal.user_id, p_amount: withdrawal.amount });
+  logger.info(`Transfer reversed, ₦${withdrawal.amount / 100} refunded`);
 }

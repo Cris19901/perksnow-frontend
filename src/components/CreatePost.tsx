@@ -83,8 +83,11 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
       // Validate and create preview for each file
       const newImages: UploadedImage[] = [];
       for (const file of convertedFiles) {
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
+        // Validate file type (also check extension for mobile browsers that don't set MIME)
+        const ext = file.name.split('.').pop()?.toLowerCase() || '';
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'svg'];
+        const isImage = file.type.startsWith('image/') || imageExts.includes(ext);
+        if (!isImage) {
           toast.error(`${file.name} is not an image file`);
           continue;
         }

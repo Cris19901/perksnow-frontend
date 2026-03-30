@@ -10,7 +10,7 @@ const router = Router();
  * Get all subscription plans
  * GET /api/subscriptions/plans
  */
-router.get('/plans', async (req, res) => {
+router.get('/plans', async (_req, res) => {
   try {
     const { data: plans, error } = await supabase
       .from('subscription_plans')
@@ -63,15 +63,16 @@ router.get('/my-subscription', requireAuth, async (req, res) => {
 
     if (planError) throw planError;
 
-    // Get active subscription record
-    const { data: subscription } = await supabase
+    // Get active subscription record (may not exist)
+    const { data: subscriptions } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    const subscription = subscriptions?.[0] || null;
 
     res.json({
       success: true,
@@ -187,7 +188,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
     }
 
     // Create payment transaction record
-    const { data: transaction, error: txError } = await supabase
+    const { error: txError } = await supabase
       .from('payment_transactions')
       .insert({
         user_id: userId,
@@ -239,7 +240,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
         }),
       });
 
-      const paystackData = await paystackResponse.json();
+      const paystackData = await paystackResponse.json() as Record<string, any>;
 
       if (!paystackData.status) {
         logger.error('Paystack initialization failed:', paystackData);
@@ -278,7 +279,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
         }),
       });
 
-      const flutterwaveData = await flutterwaveResponse.json();
+      const flutterwaveData = await flutterwaveResponse.json() as Record<string, any>;
 
       if (flutterwaveData.status !== 'success') {
         logger.error('Flutterwave initialization failed:', flutterwaveData);
@@ -327,7 +328,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
     const userId = req.user!.id;
 
     // Call the Supabase function
-    const { data, error } = await supabase.rpc('cancel_subscription', {
+    const { error } = await supabase.rpc('cancel_subscription', {
       p_user_id: userId,
     });
 

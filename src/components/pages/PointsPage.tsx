@@ -14,8 +14,11 @@ import {
   ArrowDownRight,
   Sparkles,
   DollarSign,
-  FileText
+  FileText,
+  Crown,
+  Lock
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -29,7 +32,7 @@ interface PointsPageProps {
 
 interface Transaction {
   id: string;
-  amount: number;
+  points: number;
   transaction_type: 'earn' | 'spend' | 'redeem';
   activity: string;
   created_at: string;
@@ -37,31 +40,30 @@ interface Transaction {
 
 interface WithdrawalRequest {
   id: string;
-  amount_points: number;
-  amount_currency: number;
+  amount: number;
+  currency: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   withdrawal_method: string;
-  account_details: {
-    currency?: string;
-    phoneNumber?: string;
-    email?: string;
-    accountName?: string;
-    accountNumber?: string;
-    bankName?: string;
-    country?: string;
-  };
-  created_at: string;
-  updated_at: string;
+  account_name: string | null;
+  account_number: string | null;
+  bank_name: string | null;
+  user_notes: string | null;
   admin_notes: string | null;
+  created_at: string;
 }
 
 export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [points, setPoints] = useState(0);
+  const [maturedPoints, setMaturedPoints] = useState(0);
+  const [frozenPoints, setFrozenPoints] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [isFreeTier, setIsFreeTier] = useState(true);
+  const [hasEverSubscribed, setHasEverSubscribed] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -73,15 +75,31 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
     try {
       setLoading(true);
 
-      // Fetch user points balance
+      // Fetch user points balance and subscription info
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('points_balance')
+        .select('points_balance, subscription_tier, subscription_status, subscription_expires_at')
         .eq('id', user?.id)
         .single();
 
       if (userError) throw userError;
-      setPoints(userData?.points_balance || 0);
+      const totalPoints = userData?.points_balance || 0;
+      setPoints(totalPoints);
+      // Consider anyone who has (or had) a non-free tier as having subscribed
+      setHasEverSubscribed(!!userData?.subscription_tier && userData.subscription_tier !== 'free');
+
+      // Check if user is on a paid, active tier
+      const isPaid = userData?.subscription_tier
+        && userData.subscription_tier !== 'free'
+        && userData.subscription_status === 'active'
+        && (!userData.subscription_expires_at || new Date(userData.subscription_expires_at) > new Date());
+      setIsFreeTier(!isPaid);
+
+      // Fetch frozen points (earned in last 7 days, not yet matured)
+      const { data: frozenData } = await supabase.rpc('get_frozen_points', { p_user_id: user?.id });
+      const frozen = frozenData || 0;
+      setFrozenPoints(frozen);
+      setMaturedPoints(Math.max(0, totalPoints - frozen));
 
       // Fetch points transactions history
       const { data: transactionsData, error: transError } = await supabase
@@ -96,15 +114,14 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
 
       // Fetch withdrawal requests
       const { data: withdrawalsData, error: withdrawError } = await supabase
-        .from('withdrawal_requests')
-        .select('*')
+        .from('wallet_withdrawals')
+        .select('id, amount, currency, status, withdrawal_method, account_name, account_number, bank_name, user_notes, admin_notes, created_at')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (withdrawError) {
-        // Don't throw error if table doesn't exist yet, just log it
-        console.log('Note: withdrawal_requests table may not exist yet:', withdrawError);
+        console.log('Note: Error fetching withdrawals:', withdrawError);
       } else {
         setWithdrawals(withdrawalsData || []);
       }
@@ -203,30 +220,97 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-4 h-4" />
-                <p className="text-xs">Earned This Month</p>
+              <div className="flex items-center gap-1 mb-1">
+                <TrendingUp className="w-3.5 h-3.5" />
+                <p className="text-xs">Withdrawable</p>
               </div>
-              <p className="text-xl font-bold">
-                {transactions
-                  .filter(t => t.transaction_type === 'earn')
-                  .slice(0, 10)
-                  .reduce((sum, t) => sum + t.amount, 0)
-                  .toLocaleString()}
-              </p>
+              <p className="text-lg font-bold">{maturedPoints.toLocaleString()}</p>
+              <p className="text-[10px] text-white/60">Matured points</p>
             </div>
 
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Gift className="w-4 h-4" />
-                <p className="text-xs">Available Rewards</p>
+              <div className="flex items-center gap-1 mb-1">
+                <Clock className="w-3.5 h-3.5" />
+                <p className="text-xs">Maturing</p>
               </div>
-              <p className="text-xl font-bold">5</p>
+              <p className="text-lg font-bold">{frozenPoints.toLocaleString()}</p>
+              <p className="text-[10px] text-white/60">Ready in 7 days</p>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+              <div className="flex items-center gap-1 mb-1">
+                <Gift className="w-3.5 h-3.5" />
+                <p className="text-xs">Earned Recently</p>
+              </div>
+              <p className="text-lg font-bold">
+                {transactions
+                  .filter(t => t.transaction_type === 'earn')
+                  .slice(0, 10)
+                  .reduce((sum, t) => sum + (t.points || 0), 0)
+                  .toLocaleString()}
+              </p>
             </div>
           </div>
         </Card>
+
+        {/* Earning Locked Banner — never subscribed */}
+        {!hasEverSubscribed && (
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg p-4 sm:p-5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
+                <Lock className="w-5 h-5 text-red-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900 mb-1">
+                  Point Earning is Locked
+                </h3>
+                <p className="text-sm text-red-800 mb-3">
+                  Subscribe to any plan to unlock point earning. Once unlocked, you keep earning even after your subscription expires. Start with the Daily plan for just &#8358;200.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => navigate('/subscription')}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                >
+                  <Crown className="w-4 h-4 mr-1" />
+                  Unlock Earning — &#8358;200
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Withdrawal Locked Banner — subscribed before but currently free tier */}
+        {hasEverSubscribed && isFreeTier && points > 0 && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 sm:p-5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                <Lock className="w-5 h-5 text-amber-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-900 mb-1">
+                  You have {maturedPoints.toLocaleString()} matured points ready to withdraw
+                </h3>
+                <p className="text-sm text-amber-800 mb-3">
+                  Subscribe to any paid plan to withdraw your earnings. You're still earning points — they just need an active plan to cash out.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => navigate('/subscription')}
+                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                  >
+                    <Crown className="w-4 h-4 mr-1" />
+                    Unlock Withdrawals
+                  </Button>
+                  <p className="text-xs text-amber-700 self-center">Starting from &#8358;200/day</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* How to Earn Points */}
         <Card className="p-6 mb-6">
@@ -234,34 +318,44 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
             <Award className="w-5 h-5 text-purple-600" />
             How to Earn Points
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
               <div className="p-2 bg-purple-100 rounded-lg">
-                <Coins className="w-5 h-5 text-purple-600" />
+                <FileText className="w-5 h-5 text-purple-600" />
               </div>
               <div>
                 <p className="font-medium text-sm">Post Content</p>
-                <p className="text-xs text-gray-600">+10 points per post</p>
+                <p className="text-xs text-gray-600">+200 points per post</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg">
               <div className="p-2 bg-pink-100 rounded-lg">
-                <Coins className="w-5 h-5 text-pink-600" />
+                <Sparkles className="w-5 h-5 text-pink-600" />
               </div>
               <div>
                 <p className="font-medium text-sm">Upload Reel</p>
-                <p className="text-xs text-gray-600">+20 points per reel</p>
+                <p className="text-xs text-gray-600">+250 points per reel</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
               <div className="p-2 bg-blue-100 rounded-lg">
-                <Coins className="w-5 h-5 text-blue-600" />
+                <TrendingUp className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="font-medium text-sm">Daily Login</p>
-                <p className="text-xs text-gray-600">+5 points daily</p>
+                <p className="font-medium text-sm">Comments Received</p>
+                <p className="text-xs text-gray-600">+30 points per comment</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Award className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Likes Received</p>
+                <p className="text-xs text-gray-600">+0.5 points per like</p>
               </div>
             </div>
           </div>
@@ -308,7 +402,7 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
                         : 'text-red-600'
                     }`}>
                       {transaction.transaction_type === 'earn' ? '+' : '-'}
-                      {transaction.amount}
+                      {transaction.points}
                     </p>
                     <Badge variant="outline" className="text-xs">
                       {transaction.transaction_type}
@@ -337,22 +431,22 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-sm">
-                        {withdrawal.amount_points.toLocaleString()} points
+                        {(withdrawal.amount * 10).toLocaleString()} points
                       </p>
-                      <span className="text-gray-400">→</span>
+                      <span className="text-gray-400">=</span>
                       <p className="text-sm text-gray-600 font-semibold">
-                        {withdrawal.amount_currency.toFixed(2)} {withdrawal.account_details?.currency || 'NGN'}
+                        {withdrawal.amount.toFixed(2)} {withdrawal.currency || 'NGN'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                      <span className="capitalize">{withdrawal.withdrawal_method.replace('_', ' ')}</span>
+                      <span className="capitalize">{withdrawal.withdrawal_method?.replace('_', ' ') || 'N/A'}</span>
                       <span>•</span>
                       <span>{formatDate(withdrawal.created_at)}</span>
                     </div>
-                    {withdrawal.account_details?.accountName && (
+                    {withdrawal.account_name && (
                       <p className="text-xs text-gray-600">
-                        {withdrawal.account_details.accountName}
-                        {withdrawal.account_details.bankName && ` • ${withdrawal.account_details.bankName}`}
+                        {withdrawal.account_name}
+                        {withdrawal.bank_name && ` • ${withdrawal.bank_name}`}
                       </p>
                     )}
                     {withdrawal.admin_notes && (
@@ -378,6 +472,7 @@ export function PointsPage({ onNavigate, onCartClick, cartItemsCount }: PointsPa
         open={showWithdrawalModal}
         onOpenChange={setShowWithdrawalModal}
         currentBalance={points}
+        maturedBalance={maturedPoints}
         onSuccess={fetchPointsData}
       />
 

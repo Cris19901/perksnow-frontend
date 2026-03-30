@@ -9,9 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { OTPVerification } from '../OTPVerification';
 
 export function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, pending2FA, complete2FA, cancel2FA } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,13 +49,13 @@ export function LoginPage() {
       toast.success('Password reset email sent! Check your inbox (including spam folder).');
     } catch (err: any) {
       console.error('Password reset error:', err);
-      // Be more specific about the error
-      if (err.message.includes('rate')) {
+      const msg = err?.message?.toLowerCase() || '';
+      if (err?.status === 429 || msg.includes('rate')) {
         toast.error('Too many requests. Please wait a few minutes and try again.');
-      } else if (err.message.includes('email')) {
+      } else if (msg.includes('email') || msg.includes('invalid')) {
         toast.error('Please check your email address and try again.');
       } else {
-        toast.error(err.message || 'Failed to send reset email. Please contact support.');
+        toast.error(err?.message || 'Failed to send reset email. Please contact support.');
       }
     } finally {
       setResetLoading(false);
@@ -67,15 +68,27 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn({ email, password });
-      console.log('✅ LoginPage: Login successful');
-      navigate('/feed');
+      const result = await signIn({ email, password });
+      if (!result.requires2FA) {
+        navigate('/feed');
+      }
+      // If requires2FA, the pending2FA state will show the OTP screen
     } catch (err: any) {
-      console.error('❌ LoginPage: Login failed:', err);
+      console.error('LoginPage: Login failed:', err);
       setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handle2FAVerified = () => {
+    complete2FA();
+    navigate('/feed');
+  };
+
+  const handle2FACancel = async () => {
+    await cancel2FA();
+    setError(null);
   };
 
   return (
@@ -119,6 +132,17 @@ export function LoginPage() {
 
           {/* Right Side - Login Form */}
           <div className="w-full max-w-md mx-auto">
+            {pending2FA ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-8">
+                <OTPVerification
+                  purpose="login_2fa"
+                  onVerified={handle2FAVerified}
+                  onCancel={handle2FACancel}
+                  title="Two-Factor Authentication"
+                  description="Your account has 2FA enabled. Verify your identity to continue."
+                />
+              </div>
+            ) : (
             <div className="bg-white rounded-xl border border-gray-200 p-8">
               <h2 className="text-3xl mb-2">Log in to your account</h2>
               <p className="text-gray-600 mb-6">
@@ -236,6 +260,7 @@ export function LoginPage() {
                 </Button>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

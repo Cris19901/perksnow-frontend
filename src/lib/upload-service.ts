@@ -311,8 +311,8 @@ async function uploadWithFetch(
   file: File
 ): Promise<string> {
   const controller = new AbortController();
-  // Dynamic timeout: 60s base + 30s per 10MB, max 5 minutes
-  const timeoutMs = Math.min(60000 + Math.floor(file.size / (10 * 1024 * 1024)) * 30000, 300000);
+  // Dynamic timeout: 3 min base + 1.5 min per 10MB, max 15 minutes
+  const timeoutMs = Math.min(180000 + Math.floor(file.size / (10 * 1024 * 1024)) * 90000, 900000);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -384,8 +384,8 @@ async function uploadWithProgress(
     // Configure request
     xhr.open('PUT', uploadUrl, true);
     xhr.setRequestHeader('Content-Type', file.type);
-    // Dynamic timeout: 60s base + 30s per 10MB, max 5 minutes
-    xhr.timeout = Math.min(60000 + Math.floor(file.size / (10 * 1024 * 1024)) * 30000, 300000);
+    // Dynamic timeout: 3 min base + 1.5 min per 10MB, max 15 minutes
+    xhr.timeout = Math.min(180000 + Math.floor(file.size / (10 * 1024 * 1024)) * 90000, 900000);
 
     xhr.send(file);
   });
@@ -644,12 +644,39 @@ export async function generateVideoThumbnail(
 // ============================================
 
 /**
- * Delete a file from R2
- * Note: Requires delete Edge Function implementation
+ * Delete a file from R2 via the delete-file Edge Function
  */
 export async function deleteFile(url: string): Promise<void> {
-  logger.log('Delete file requested', url);
-  // TODO: Implement delete Edge Function
+  if (!url) return;
+
+  logger.log('Deleting file:', url);
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const response = await fetch(`${supabaseUrl}/functions/v1/delete-file`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fileUrl: url }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Delete failed: ${response.status}`);
+    }
+
+    logger.log('File deleted successfully:', url);
+  } catch (err) {
+    logger.error('Failed to delete file:', err);
+    throw err;
+  }
 }
 
 // Alias for backward compatibility

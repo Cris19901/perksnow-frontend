@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,12 +11,117 @@ import { PostComments } from './PostComments';
 import { Sheet, SheetContent } from './ui/sheet';
 import { ImageGrid } from './ImageGrid';
 import { ImageLightbox } from './ImageLightbox';
+import { Play } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+
+// YouTube player: shows thumbnail, click to play video
+// Only one video plays at a time across all Post instances
+function YouTubePlayer({ videoId }: { videoId: string }) {
+  const [playing, setPlaying] = useState(false);
+  const playerIdRef = useRef(`yt-${videoId}-${Math.random().toString(36).slice(2)}`);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.playerId !== playerIdRef.current) {
+        setPlaying(false);
+      }
+    };
+    window.addEventListener('video-play', handler);
+    return () => window.removeEventListener('video-play', handler);
+  }, []);
+
+  const handlePlay = () => {
+    window.dispatchEvent(new CustomEvent('video-play', { detail: { playerId: playerIdRef.current } }));
+    setPlaying(true);
+  };
+
+  if (playing) {
+    return (
+      <div className="w-full">
+        <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            title="YouTube video"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="w-full cursor-pointer relative group"
+      onClick={handlePlay}
+    >
+      <img
+        src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+        alt="Video thumbnail"
+        className="w-full object-cover"
+        style={{ aspectRatio: '16/9' }}
+      />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+          <Play className="w-8 h-8 sm:w-10 sm:h-10 text-white fill-white ml-1" />
+        </div>
+      </div>
+      <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+        <svg viewBox="0 0 24 24" className="w-4 h-4 fill-red-500"><path d="M23.5 6.2c-.3-1-1-1.8-2-2.1C19.6 3.5 12 3.5 12 3.5s-7.6 0-9.5.6c-1 .3-1.7 1.1-2 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8c.3 1 1 1.8 2 2.1 1.9.6 9.5.6 9.5.6s7.6 0 9.5-.6c1-.3 1.7-1.1 2-2.1.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8z"/><path d="M9.5 15.5V8.5l6.5 3.5-6.5 3.5z" fill="white"/></svg>
+        YouTube
+      </div>
+    </div>
+  );
+}
+
+// Render text with clickable links and **bold** markdown
+function RichText({ text }: { text: string }) {
+  // Split by URLs and **bold** markers
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  const boldRegex = /\*\*(.+?)\*\*/g;
+
+  // First pass: split by URLs
+  const parts = text.split(urlRegex);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        // Check if this part is a URL
+        if (urlRegex.test(part)) {
+          urlRegex.lastIndex = 0; // Reset regex state
+          return (
+            <a
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-600 hover:text-purple-800 hover:underline break-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part.length > 60 ? part.substring(0, 57) + '...' : part}
+            </a>
+          );
+        }
+        // For non-URL parts, process **bold** markers
+        const boldParts = part.split(boldRegex);
+        return boldParts.map((bp, j) => {
+          // Odd indices are the captured groups (bold text)
+          if (j % 2 === 1) {
+            return <strong key={`${i}-${j}`}>{bp}</strong>;
+          }
+          return <span key={`${i}-${j}`}>{bp}</span>;
+        });
+      })}
+    </>
+  );
+}
 
 interface PostProps {
   id: number;
@@ -53,6 +158,65 @@ export function Post({ id, author, content, image, images, images_count, likes, 
   const [commentCount, setCommentCount] = useState(comments);
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Reading tracker: award 40 pts after 15s of viewing
+  const postRef = useRef<HTMLDivElement>(null);
+  const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readAwardedRef = useRef(false);
+
+  useEffect(() => {
+    if (!user || readAwardedRef.current) return;
+    const el = postRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !readAwardedRef.current) {
+          // Start 15s timer when post is visible
+          if (!readTimerRef.current) {
+            readTimerRef.current = setTimeout(async () => {
+              readTimerRef.current = null;
+              if (readAwardedRef.current) return;
+              try {
+                console.log(`📖 Awarding reading points for post ${id}...`);
+                const { data, error } = await supabase.rpc('award_reading_points', {
+                  p_user_id: user.id,
+                  p_post_id: String(id),
+                  p_duration_seconds: 15,
+                });
+                if (error) {
+                  console.error('Reading points RPC error:', error);
+                  return;
+                }
+                console.log('📖 Reading points result:', data);
+                if (data?.success) {
+                  readAwardedRef.current = true;
+                  toast.success(`+${data.points} pts for reading`, { duration: 2000 });
+                } else {
+                  // Mark as awarded for non-retryable reasons (already_read, daily_limit, earning_locked)
+                  if (data?.reason && data.reason !== 'error') {
+                    readAwardedRef.current = true;
+                  }
+                }
+              } catch (err) {
+                console.error('Reading points error:', err);
+              }
+            }, 15000);
+          }
+        } else if (!entry.isIntersecting && readTimerRef.current) {
+          clearTimeout(readTimerRef.current);
+          readTimerRef.current = null;
+        }
+      },
+      { threshold: 0.25 }
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      if (readTimerRef.current) clearTimeout(readTimerRef.current);
+    };
+  }, [user, id]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [postAuthorId, setPostAuthorId] = useState<string | null>(null);
 
@@ -224,8 +388,37 @@ export function Post({ id, author, content, image, images, images_count, likes, 
   // Determine which images to display
   const displayImages = images && images.length > 0 ? images : (image ? [{ url: image }] : []);
 
+  // Detect YouTube URLs in content
+  const youtubeEmbed = useMemo(() => {
+    if (!content) return null;
+    // Match youtube.com/watch, youtube.com/shorts, youtu.be links
+    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})(?:[&?\S]*)?/i;
+    const match = content.match(ytRegex);
+    if (!match) return null;
+
+    const videoId = match[1];
+    const fullUrl = match[0];
+    const isShort = /shorts\//.test(fullUrl);
+
+    // Remove the YouTube URL and any "Watch:" prefix from displayed content
+    let cleanContent = content
+      .replace(/▶️\s*Watch:\s*/g, '')
+      .replace(fullUrl, '')
+      .replace(/\*\*/g, '') // remove markdown bold markers
+      .trim();
+
+    // Remove trailing source line if present
+    cleanContent = cleanContent.replace(/📌\s*Source:.*$/m, '').trim();
+    // Remove "Read more:" leftover
+    cleanContent = cleanContent.replace(/🔗\s*Read more:\s*/g, '').trim();
+    // Clean up multiple newlines
+    cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n').trim();
+
+    return { videoId, isShort, cleanContent };
+  }, [content]);
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div ref={postRef} className="bg-white rounded-lg border border-gray-200">
       {/* Post Header */}
       <div className="flex items-center justify-between p-3 sm:p-4">
         <div
@@ -272,13 +465,22 @@ export function Post({ id, author, content, image, images, images_count, likes, 
         )}
       </div>
 
-      {/* Post Content */}
-      <div className="px-3 sm:px-4 pb-2 sm:pb-3">
-        <p className="whitespace-pre-wrap text-sm sm:text-base">{content}</p>
-      </div>
+      {/* Post Content - hide text for YouTube-only posts */}
+      {(!youtubeEmbed || youtubeEmbed.cleanContent.length > 0) && (
+        <div className="px-3 sm:px-4 pb-2 sm:pb-3">
+          <p className="whitespace-pre-wrap text-sm sm:text-base">
+            <RichText text={youtubeEmbed ? youtubeEmbed.cleanContent : content} />
+          </p>
+        </div>
+      )}
 
-      {/* Post Images */}
-      {displayImages.length > 0 && (
+      {/* YouTube Video Player */}
+      {youtubeEmbed && (
+        <YouTubePlayer videoId={youtubeEmbed.videoId} />
+      )}
+
+      {/* Post Images (hide if YouTube embed already shows the thumbnail) */}
+      {!youtubeEmbed && displayImages.length > 0 && (
         <div className="w-full">
           {displayImages.length === 1 ? (
             // Single image - full width

@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { sendWithdrawalApprovedEmail, sendWithdrawalRejectedEmail } from '@/lib/email';
 
 interface AdminWithdrawalsPageProps {
   onNavigate?: (page: string) => void;
@@ -145,6 +146,65 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
       });
 
       if (error) throw error;
+
+      // Send email notification to user
+      if (selectedWithdrawal.user?.email) {
+        try {
+          const userName = selectedWithdrawal.user.username || 'User';
+          const amount = selectedWithdrawal.amount;
+          const currency = selectedWithdrawal.currency || 'NGN';
+
+          if (status === 'approved' || status === 'completed') {
+            // Format account details for email
+            const accountDetails = selectedWithdrawal.account_name
+              ? `${selectedWithdrawal.account_name} (${selectedWithdrawal.account_number || 'N/A'})`
+              : selectedWithdrawal.account_number || 'N/A';
+
+            const withdrawalMethod = selectedWithdrawal.withdrawal_method?.replace('_', ' ').toUpperCase() || 'N/A';
+
+            await sendWithdrawalApprovedEmail(
+              selectedWithdrawal.user.email,
+              userName,
+              amount,
+              currency,
+              withdrawalMethod,
+              accountDetails
+            );
+          } else if (status === 'rejected') {
+            const reason = adminNotes.trim() || 'The withdrawal request could not be processed at this time.';
+            await sendWithdrawalRejectedEmail(
+              selectedWithdrawal.user.email,
+              userName,
+              amount,
+              currency,
+              reason
+            );
+          }
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError);
+          // Don't throw error - withdrawal was successful, email is just a notification
+        }
+      }
+
+      // Audit log (fire-and-forget)
+      try {
+        const adminUser = (await supabase.auth.getUser()).data.user;
+        if (adminUser) {
+          await supabase.from('admin_audit_log').insert({
+            admin_id: adminUser.id,
+            action: `withdrawal_${status}`,
+            target_user_id: selectedWithdrawal.user_id,
+            target_resource_id: selectedWithdrawal.id,
+            details: {
+              amount: selectedWithdrawal.amount,
+              currency: selectedWithdrawal.currency,
+              admin_notes: adminNotes.trim() || null,
+            },
+          });
+        }
+      } catch (auditErr) {
+        console.error('Audit log failed (non-blocking):', auditErr);
+      }
 
       toast.success(`Withdrawal ${status} successfully!`);
       setShowDetailsModal(false);

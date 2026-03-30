@@ -2,6 +2,7 @@ import React, { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
+import { supabase } from '@/lib/supabase';
 
 interface Props {
   children: ReactNode;
@@ -28,11 +29,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to console (in production, send to error tracking service)
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 
-    // TODO: Send to error tracking service like Sentry
-    // Sentry.captureException(error, { extra: errorInfo });
+    // Log crash to Supabase for production visibility (fire-and-forget)
+    supabase.from('client_error_logs').insert({
+      error_message: error.message,
+      error_stack: error.stack?.slice(0, 2000),
+      component_stack: errorInfo.componentStack?.slice(0, 2000),
+      url: window.location.href,
+      user_agent: navigator.userAgent,
+    }).then(() => {}).catch(() => {});
   }
 
   handleReset = () => {

@@ -5,7 +5,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Progress } from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Upload, Video, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, Video, X, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDailyLimits } from '@/hooks/useDailyLimits';
@@ -27,8 +27,17 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [uploadSpeed, setUploadSpeed] = useState<number>(0);
+  const [uploadETA, setUploadETA] = useState<number>(0);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
+  const [videoResolution, setVideoResolution] = useState<{ width: number; height: number } | null>(null);
+  const [shouldCompress, setShouldCompress] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadStartTimeRef = useRef<number>(0);
+  const lastProgressRef = useRef<{ loaded: number; timestamp: number }>({ loaded: 0, timestamp: 0 });
 
   useEffect(() => {
     return () => {
@@ -64,17 +73,174 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
     setVideoPreview(url);
   };
 
-  const handleVideoDuration = () => {
-    if (videoRef.current) {
+  const handleVideoDuration = async () => {
+    if (videoRef.current && videoFile) {
       const duration = videoRef.current.duration;
       setVideoDuration(Math.round(duration));
 
-      // Validate duration (recommend 15-60 seconds)
+      // Validate duration (recommend 15-60 seconds, max 10 minutes)
       if (duration < 3) {
         setError('Video is too short. Minimum duration is 3 seconds');
-      } else if (duration > 180) {
-        setError('Video is too long. Maximum duration is 3 minutes');
+      } else if (duration > 600) {
+        setError('Video is too long. Maximum duration is 10 minutes');
       }
+
+      // Analyze video to determine if compression is needed
+      await analyzeVideo(videoFile);
+    }
+  };
+
+  const formatSpeed = (bytesPerSecond: number): string => {
+    const mbps = bytesPerSecond / (1024 * 1024);
+    return mbps >= 1 ? `${mbps.toFixed(1)} MB/s` : `${(mbps * 1024).toFixed(0)} KB/s`;
+  };
+
+  const formatETA = (seconds: number): string => {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `${minutes}m ${secs}s`;
+  };
+
+  const analyzeVideo = async (file: File): Promise<void> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+
+      video.onloadedmetadata = () => {
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        const fileSizeMB = file.size / (1024 * 1024);
+
+        setVideoResolution({ width, height });
+
+        // Determine if compression is beneficial:
+        // - Files larger than 25MB
+        // - OR resolution higher than 1080p
+        // - OR aspect ratio suggests high quality (width > 1920)
+        const needsCompression =
+          fileSizeMB > 25 ||
+          width > 1920 ||
+          height > 1920;
+
+        setShouldCompress(needsCompression);
+        URL.revokeObjectURL(video.src);
+        resolve();
+      };
+
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const compressVideo = async (file: File): Promise<File> => {
+    if (!shouldCompress) {
+      return file; // No compression needed
+    }
+
+    try {
+      setCompressing(true);
+      setCompressionProgress(0);
+
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) throw new Error('Canvas not supported');
+
+      // Load video
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('Failed to load video'));
+        video.src = URL.createObjectURL(file);
+      });
+
+      // Calculate target resolution (max 1080p)
+      let targetWidth = video.videoWidth;
+      let targetHeight = video.videoHeight;
+
+      if (targetWidth > 1920 || targetHeight > 1920) {
+        const aspectRatio = targetWidth / targetHeight;
+        if (targetWidth > targetHeight) {
+          targetWidth = 1920;
+          targetHeight = Math.round(1920 / aspectRatio);
+        } else {
+          targetHeight = 1920;
+          targetWidth = Math.round(1920 * aspectRatio);
+        }
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      // Set up MediaRecorder
+      const stream = canvas.captureStream(30); // 30 FPS
+      const chunks: Blob[] = [];
+
+      const mimeType = 'video/webm;codecs=vp8';
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 2500000, // 2.5 Mbps - good quality, reasonable size
+      });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      // Start recording
+      mediaRecorder.start(100); // Collect data every 100ms
+
+      video.play();
+
+      // Draw frames to canvas
+      const drawFrame = () => {
+        if (video.paused || video.ended) {
+          mediaRecorder.stop();
+          return;
+        }
+
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+        // Update progress
+        const progress = (video.currentTime / video.duration) * 100;
+        setCompressionProgress(Math.round(progress));
+
+        requestAnimationFrame(drawFrame);
+      };
+
+      drawFrame();
+
+      // Wait for recording to finish
+      const compressedBlob = await new Promise<Blob>((resolve) => {
+        mediaRecorder.onstop = () => {
+          resolve(new Blob(chunks, { type: 'video/webm' }));
+        };
+      });
+
+      // Clean up
+      URL.revokeObjectURL(video.src);
+      video.pause();
+
+      // Convert to File
+      const compressedFile = new File(
+        [compressedBlob],
+        file.name.replace(/\.[^.]+$/, '.webm'),
+        { type: 'video/webm' }
+      );
+
+      const originalSizeMB = file.size / (1024 * 1024);
+      const compressedSizeMB = compressedFile.size / (1024 * 1024);
+      const savings = ((originalSizeMB - compressedSizeMB) / originalSizeMB) * 100;
+
+      toast.success(`Video optimized! Reduced from ${originalSizeMB.toFixed(1)}MB to ${compressedSizeMB.toFixed(1)}MB (${savings.toFixed(0)}% smaller)`);
+
+      setCompressing(false);
+      return compressedFile;
+
+    } catch (error) {
+      console.error('Compression failed:', error);
+      toast.error('Compression failed, uploading original video');
+      setCompressing(false);
+      return file; // Fallback to original file
     }
   };
 
@@ -139,10 +305,21 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
     try {
       setUploading(true);
       setUploadProgress(5);
+      uploadStartTimeRef.current = Date.now();
+      lastProgressRef.current = { loaded: 0, timestamp: Date.now() };
+
+      // Compress video if needed
+      let fileToUpload = videoFile;
+      if (shouldCompress) {
+        setUploadStatus('Optimizing video...');
+        fileToUpload = await compressVideo(videoFile);
+        setUploadProgress(5);
+      }
 
       // Generate thumbnail using optimized function
+      setUploadStatus('Generating thumbnail...');
       setUploadProgress(10);
-      const thumbnailBlob = await generateVideoThumbnail(videoFile, 1);
+      const thumbnailBlob = await generateVideoThumbnail(fileToUpload, 1);
 
       // Convert thumbnail blob to File
       const thumbnailFile = new File(
@@ -154,15 +331,34 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       setUploadProgress(15);
 
       // Upload thumbnail first (faster, smaller file)
+      setUploadStatus('Uploading thumbnail...');
       const thumbnailUrl = await uploadImage(thumbnailFile, 'videos', user.id);
 
       setUploadProgress(20);
+      setUploadStatus('Uploading video...');
 
-      // Upload video with progress tracking
+      // Upload video with enhanced progress tracking
       const videoUrl = await uploadVideo(
-        videoFile,
+        fileToUpload,
         user.id,
         (progress) => {
+          const now = Date.now();
+          const timeDiff = (now - lastProgressRef.current.timestamp) / 1000; // seconds
+
+          if (timeDiff > 0.5) { // Update speed every 500ms
+            const bytesDiff = progress.loaded - lastProgressRef.current.loaded;
+            const speed = bytesDiff / timeDiff; // bytes per second
+
+            setUploadSpeed(speed);
+
+            // Calculate ETA
+            const remaining = progress.total - progress.loaded;
+            const eta = remaining / speed;
+            setUploadETA(eta);
+
+            lastProgressRef.current = { loaded: progress.loaded, timestamp: now };
+          }
+
           // Map video upload progress (20-90%)
           const mappedProgress = 20 + (progress.percentage * 0.7);
           setUploadProgress(Math.round(mappedProgress));
@@ -170,6 +366,7 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       );
 
       setUploadProgress(90);
+      setUploadStatus('Finalizing...');
 
       // Create reel record in database
       const { error: insertError } = await supabase.from('reels').insert({
@@ -186,7 +383,7 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       await incrementPostCount();
 
       setUploadProgress(100);
-      toast.success(`Reel uploaded successfully! You earned 50 points! (${limits.posts_used + 1}/${limits.posts_limit} posts used today)`);
+      toast.success(`Reel uploaded successfully! You earned 250 points! (${limits.posts_used + 1}/${limits.posts_limit} posts used today)`);
 
       // Refresh limits to update UI
       await fetchLimits();
@@ -198,6 +395,13 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
         setCaption('');
         setVideoDuration(0);
         setUploadProgress(0);
+        setUploadStatus('');
+        setUploadSpeed(0);
+        setUploadETA(0);
+        setVideoResolution(null);
+        setShouldCompress(false);
+        setCompressing(false);
+        setCompressionProgress(0);
         setUploading(false);
         onUploadComplete?.();
       }, 1000);
@@ -206,6 +410,11 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
       console.error('Error uploading reel:', err);
       toast.error(err.message || 'Failed to upload reel');
       setUploadProgress(0);
+      setUploadStatus('');
+      setUploadSpeed(0);
+      setUploadETA(0);
+      setCompressing(false);
+      setCompressionProgress(0);
       setUploading(false);
     }
   };
@@ -218,6 +427,10 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
     setVideoPreview(null);
     setVideoDuration(0);
     setError(null);
+    setVideoResolution(null);
+    setShouldCompress(false);
+    setCompressing(false);
+    setCompressionProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -254,7 +467,7 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
               MP4, MOV, or WebM (max 100MB)
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Recommended: 15-60 seconds, 720p-1080p
+              Recommended: 15-60 seconds (max 10 minutes), 720p-1080p
             </p>
             <input
               ref={fileInputRef}
@@ -288,11 +501,39 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
 
             {/* Video Info */}
             {videoDuration > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span>Duration: {videoDuration} seconds</span>
-                <span className="text-gray-400">•</span>
-                <span>Size: {(videoFile!.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <div className="space-y-3">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span>Duration: {videoDuration} seconds</span>
+                    <span className="text-gray-400">•</span>
+                    <span>Size: {(videoFile!.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
+                  {videoResolution && (
+                    <p className="text-sm text-gray-600">
+                      Resolution: {videoResolution.width}x{videoResolution.height}
+                    </p>
+                  )}
+                  {shouldCompress && (
+                    <p className="text-sm text-orange-600 font-medium mt-2 flex items-center gap-1">
+                      <Sparkles className="w-4 h-4" />
+                      Will be optimized for faster upload
+                    </p>
+                  )}
+                </div>
+
+                {/* Optimization Tips */}
+                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                  <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-1">
+                    💡 Pro Tips for Fast Uploads
+                  </h4>
+                  <ul className="text-sm text-green-800 space-y-1">
+                    <li>✅ Record in 1080p (not 4K) for faster uploads</li>
+                    <li>✅ Keep videos under 60 seconds when possible</li>
+                    <li>✅ Use good lighting to reduce file size</li>
+                    <li>✅ Stable Wi-Fi is faster than mobile data</li>
+                  </ul>
+                </div>
               </div>
             )}
 
@@ -321,14 +562,34 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
               </p>
             </div>
 
-            {/* Upload Progress */}
-            {uploading && (
+            {/* Compression Progress */}
+            {compressing && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Uploading...</span>
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-orange-600 animate-pulse" />
+                    Optimizing video...
+                  </span>
+                  <span className="font-medium text-orange-600">{compressionProgress}%</span>
+                </div>
+                <Progress value={compressionProgress} className="h-2" />
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploading && !compressing && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">{uploadStatus}</span>
                   <span className="font-medium text-purple-600">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
+                {uploadSpeed > 0 && uploadETA > 0 && uploadProgress > 20 && uploadProgress < 90 && (
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Speed: {formatSpeed(uploadSpeed)}</span>
+                    <span>ETA: {formatETA(uploadETA)}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -354,16 +615,21 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
             {/* Upload Button */}
             <Button
               onClick={handleUpload}
-              disabled={uploading || !!error || !caption.trim() || !limits.can_post}
+              disabled={uploading || compressing || !!error || !caption.trim() || !limits.can_post}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               size="lg"
             >
-              {uploading ? (
+              {compressing ? (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+                  Optimizing... {compressionProgress}%
+                </>
+              ) : uploading ? (
                 <>Uploading... {uploadProgress}%</>
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Reel & Earn 50 Points
+                  Upload Reel & Earn 250 Points
                 </>
               )}
             </Button>
@@ -379,7 +645,7 @@ export function ReelUpload({ onUploadComplete, onClose }: ReelUploadProps) {
               <li>• Use good lighting and clear audio</li>
               <li>• Add an interesting caption</li>
               <li>• Record in portrait mode for best viewing</li>
-              <li>• Earn 50 points for each upload + bonus for views!</li>
+              <li>• Earn 250 points for each upload + bonus for views!</li>
             </ul>
           </div>
         )}

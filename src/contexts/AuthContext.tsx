@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { signIn, signUp, signOut as authSignOut, SignInData, SignUpData } from '@/lib/auth';
@@ -6,9 +6,12 @@ import { signIn, signUp, signOut as authSignOut, SignInData, SignUpData } from '
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (data: SignInData) => Promise<void>;
+  pending2FA: boolean;
+  signIn: (data: SignInData) => Promise<{ requires2FA: boolean }>;
   signUp: (data: SignUpData) => Promise<any>;
   signOut: () => Promise<void>;
+  complete2FA: () => void;
+  cancel2FA: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +19,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pending2FA, setPending2FA] = useState(false);
+  const [pending2FAUser, setPending2FAUser] = useState<User | null>(null);
+  const pending2FARef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -57,17 +63,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔍 AuthContext: Auth state changed:', event, session?.user?.id || 'no user');
 
       if (mounted) {
-        setUser(session?.user ?? null);
+        // Don't set user during 2FA pending state (user hasn't verified yet)
+        if (!pending2FARef.current) {
+          setUser(session?.user ?? null);
+        }
 
         // Handle token refresh
         if (event === 'TOKEN_REFRESHED') {
-          console.log('✅ AuthContext: Token refreshed successfully');
+          console.log('AuthContext: Token refreshed successfully');
         }
 
         // Handle sign out
         if (event === 'SIGNED_OUT') {
-          console.log('🔍 AuthContext: User signed out');
           setUser(null);
+          setPending2FA(false);
+          setPending2FAUser(null);
+          pending2FARef.current = false;
         }
       }
     });
@@ -79,8 +90,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleSignIn = async (data: SignInData) => {
-    const { user: signedInUser } = await signIn(data);
-    setUser(signedInUser);
+    const result = await signIn(data);
+    if (result.requires2FA && result.user) {
+      // User needs 2FA - hold the user object but don't expose it yet
+      pending2FARef.current = true;
+      setPending2FAUser(result.user);
+      setPending2FA(true);
+      return { requires2FA: true };
+    } else {
+      setUser(result.user);
+      return { requires2FA: false };
+    }
+  };
+
+  const complete2FA = () => {
+    if (pending2FAUser) {
+      pending2FARef.current = false;
+      setUser(pending2FAUser);
+      setPending2FA(false);
+      setPending2FAUser(null);
+    }
+  };
+
+  const cancel2FA = async () => {
+    pending2FARef.current = false;
+    setPending2FA(false);
+    setPending2FAUser(null);
+    await authSignOut();
   };
 
   const handleSignUp = async (data: SignUpData) => {
@@ -97,9 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     loading,
+    pending2FA,
     signIn: handleSignIn,
     signUp: handleSignUp,
     signOut: handleSignOut,
+    complete2FA,
+    cancel2FA,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

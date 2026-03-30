@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { sendSignupBonusEmail } from './email';
 import { logger } from './logger';
+import { recordDeviceFingerprint } from './fingerprint';
 import type { User } from '@supabase/supabase-js';
 
 export interface SignUpData {
@@ -158,6 +159,9 @@ export const signUp = async ({ email, password, username, full_name, phone_numbe
       }
     }, 2000); // Start checking after 2 seconds
 
+    // Record device fingerprint (non-blocking)
+    recordDeviceFingerprint(authData.user.id).catch(() => {});
+
     return { user: authData.user, session: authData.session };
   } catch (error) {
     logger.error('Error signing up', error);
@@ -176,7 +180,26 @@ export const signIn = async ({ email, password }: SignInData) => {
     });
 
     if (error) throw error;
-    return { user: data.user, session: data.session };
+
+    // Record device fingerprint on login (non-blocking)
+    if (data.user) {
+      recordDeviceFingerprint(data.user.id).catch(() => {});
+    }
+
+    // Check if 2FA is enabled
+    if (data.user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('two_factor_enabled')
+        .eq('id', data.user.id)
+        .single();
+
+      if (userData?.two_factor_enabled) {
+        return { user: data.user, session: data.session, requires2FA: true };
+      }
+    }
+
+    return { user: data.user, session: data.session, requires2FA: false };
   } catch (error) {
     logger.error('Error signing in', error);
     throw error;

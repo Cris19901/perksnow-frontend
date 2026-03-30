@@ -129,16 +129,30 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
     try {
       setSubmitting(true);
 
-      const { error } = await supabase.from('post_comments').insert({
+      const { data: newCommentData, error } = await supabase.from('post_comments').insert({
         post_id: postId,
         user_id: user.id,
         content: newComment.trim()
-      });
+      }).select('id').single();
 
       if (error) throw error;
 
       // Increment comment count
       await incrementCommentCount();
+
+      // Award quality comment points (40 pts if comment meets quality criteria)
+      if (newCommentData?.id) {
+        try {
+          const { data: pointsResult } = await supabase.rpc('award_quality_comment_points', {
+            p_user_id: user.id,
+            p_comment_id: newCommentData.id,
+            p_comment_text: newComment.trim(),
+          });
+          if (pointsResult?.success) {
+            toast.success(`+${pointsResult.points} pts for quality comment!`, { duration: 3000 });
+          }
+        } catch {}
+      }
 
       setNewComment('');
       toast.success(`Comment added (${limits.comments_used + 1}/${limits.comments_limit} today)`);
@@ -178,17 +192,31 @@ export function PostComments({ postId, onClose, onCommentAdded }: PostCommentsPr
     try {
       setSubmitting(true);
 
-      const { error } = await supabase.from('post_comments').insert({
+      const { data: replyData, error } = await supabase.from('post_comments').insert({
         post_id: postId,
         user_id: user.id,
         parent_comment_id: parentCommentId,
         content: replyContent.trim()
-      });
+      }).select('id').single();
 
       if (error) throw error;
 
       // Increment comment count
       await incrementCommentCount();
+
+      // Award quality comment points for replies too
+      if (replyData?.id) {
+        try {
+          const { data: pointsResult } = await supabase.rpc('award_quality_comment_points', {
+            p_user_id: user.id,
+            p_comment_id: replyData.id,
+            p_comment_text: replyContent.trim(),
+          });
+          if (pointsResult?.success) {
+            toast.success(`+${pointsResult.points} pts for quality comment!`, { duration: 3000 });
+          }
+        } catch {}
+      }
 
       setReplyContent('');
       setReplyingTo(null);

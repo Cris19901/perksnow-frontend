@@ -276,8 +276,198 @@ export const emailTemplates = {
   }),
 
   /**
+   * Withdrawal Approved Email
+   */
+  withdrawalApproved: (userName: string, amount: number, currency: string, withdrawalMethod: string, accountDetails: string) => ({
+    subject: `Withdrawal Approved - ${currency} ${amount.toFixed(2)}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                  <tr>
+                    <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 50px 40px; text-align: center;">
+                      <div style="font-size: 64px; margin-bottom: 10px;">✅</div>
+                      <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700;">Withdrawal Approved!</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 40px;">
+                      <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Hi ${userName}! 👋</h2>
+                      <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                        Great news! Your withdrawal request has been approved and is being processed.
+                      </p>
+
+                      <div style="background-color: #f9f9f9; padding: 30px; border-radius: 10px; margin: 30px 0;">
+                        <h3 style="color: #333333; margin: 0 0 20px 0; font-size: 18px;">Withdrawal Details</h3>
+
+                        <div style="border-bottom: 1px solid #e5e5e5; padding: 15px 0;">
+                          <span style="color: #666666; font-size: 14px;">Amount:</span>
+                          <span style="color: #10b981; font-weight: 700; font-size: 24px; float: right;">${currency} ${amount.toFixed(2)}</span>
+                        </div>
+
+                        <div style="border-bottom: 1px solid #e5e5e5; padding: 15px 0;">
+                          <span style="color: #666666; font-size: 14px;">Method:</span>
+                          <span style="color: #333333; font-weight: 600; float: right;">${withdrawalMethod}</span>
+                        </div>
+
+                        <div style="padding: 15px 0;">
+                          <span style="color: #666666; font-size: 14px;">Account:</span>
+                          <span style="color: #333333; font-weight: 600; float: right;">${accountDetails}</span>
+                        </div>
+                      </div>
+
+                      <div style="background-color: #e0f2fe; border-left: 4px solid #0284c7; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                        <p style="color: #075985; font-size: 14px; margin: 0; line-height: 1.6;">
+                          <strong>ℹ️ What happens next?</strong><br/>
+                          Your withdrawal is being processed and funds will be transferred to your account within 1-3 business days. You'll receive another notification once the transfer is complete.
+                        </p>
+                      </div>
+
+                      <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 30px 0 0 0;">
+                        If you have any questions or concerns, please don't hesitate to contact our support team.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="background-color: #f9f9f9; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
+                      <p style="color: #999999; font-size: 12px; margin: 0;">
+                        © ${new Date().getFullYear()} LavLay. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `,
+    text: `Withdrawal Approved!\n\nHi ${userName},\n\nGreat news! Your withdrawal request has been approved.\n\nWithdrawal Details:\n- Amount: ${currency} ${amount.toFixed(2)}\n- Method: ${withdrawalMethod}\n- Account: ${accountDetails}\n\nWhat happens next?\nYour withdrawal is being processed and funds will be transferred to your account within 1-3 business days.\n\n© ${new Date().getFullYear()} LavLay`
+  }),
+
+  /**
+   * Withdrawal Rejected Email
+   */
+  withdrawalRejected: (userName: string, amount: number, currency: string, reason: string) => ({
+    subject: `Withdrawal Request Update - ${currency} ${amount.toFixed(2)}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                  <tr>
+                    <td style="padding: 40px;">
+                      <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Withdrawal Request Update</h2>
+                      <p style="color: #666666; font-size: 16px; margin: 0 0 20px 0;">
+                        Hi ${userName},
+                      </p>
+                      <p style="color: #666666; font-size: 16px; margin: 0 0 30px 0;">
+                        We regret to inform you that your withdrawal request for <strong>${currency} ${amount.toFixed(2)}</strong> could not be processed at this time.
+                      </p>
+
+                      <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="color: #991b1b; font-size: 14px; margin: 0 0 10px 0;">
+                          <strong>Reason:</strong>
+                        </p>
+                        <p style="color: #7f1d1d; font-size: 14px; margin: 0; line-height: 1.6;">
+                          ${reason}
+                        </p>
+                      </div>
+
+                      <p style="color: #666666; font-size: 14px; margin: 30px 0;">
+                        If you believe this is an error or have questions, please contact our support team for assistance.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `,
+    text: `Withdrawal Request Update\n\nHi ${userName},\n\nYour withdrawal request for ${currency} ${amount.toFixed(2)} could not be processed.\n\nReason: ${reason}\n\nPlease contact support if you have any questions.`
+  }),
+
+  /**
    * Signup Bonus Email - Sent when user receives signup bonus
    */
+  /**
+   * OTP Verification Code
+   */
+  otpCode: (code: string, purpose: 'withdrawal' | 'login_2fa') => ({
+    subject: purpose === 'withdrawal'
+      ? `Your LavLay Withdrawal Verification Code: ${code}`
+      : `Your LavLay Login Verification Code: ${code}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                  <tr>
+                    <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
+                      <div style="font-size: 48px; margin-bottom: 10px;">${purpose === 'withdrawal' ? '&#128274;' : '&#128272;'}</div>
+                      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">
+                        ${purpose === 'withdrawal' ? 'Withdrawal Verification' : 'Login Verification'}
+                      </h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 40px; text-align: center;">
+                      <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                        ${purpose === 'withdrawal'
+                          ? 'You requested a withdrawal from your LavLay account. Use the code below to verify your identity.'
+                          : 'Someone is trying to log into your LavLay account. Use the code below to complete verification.'}
+                      </p>
+                      <div style="background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%); border: 2px solid #667eea; border-radius: 16px; padding: 30px; margin: 20px 0;">
+                        <p style="color: #667eea; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 10px 0;">Verification Code</p>
+                        <p style="color: #333333; font-size: 42px; font-weight: 700; letter-spacing: 8px; margin: 0;">${code}</p>
+                      </div>
+                      <p style="color: #999999; font-size: 14px; margin: 20px 0 0 0;">
+                        This code expires in <strong>10 minutes</strong>. Do not share this code with anyone.
+                      </p>
+                      <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 8px; margin: 30px 0; text-align: left;">
+                        <p style="color: #991b1b; font-size: 13px; margin: 0;">
+                          <strong>Security Notice:</strong> If you did not request this code, please ignore this email and secure your account by changing your password.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="background-color: #f9f9f9; padding: 25px; text-align: center; border-top: 1px solid #eeeeee;">
+                      <p style="color: #999999; font-size: 12px; margin: 0;">
+                        &copy; ${new Date().getFullYear()} LavLay. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `,
+    text: `Your LavLay verification code is: ${code}\n\nThis code expires in 10 minutes. Do not share this code with anyone.\n\nIf you did not request this code, please ignore this email.\n\n© ${new Date().getFullYear()} LavLay`
+  }),
+
   signupBonus: (userName: string, bonusAmount: number) => ({
     subject: `Welcome to LavLay! ${bonusAmount} Points Awarded 🎉`,
     html: `
@@ -306,37 +496,37 @@ export const emailTemplates = {
                       <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Start Exploring LavLay</h2>
 
                       <p style="color: #666666; font-size: 16px; margin: 0 0 30px 0; line-height: 1.6;">
-                        Welcome to the community! Your ${bonusAmount} points have been added to your account. Here's what you can do with them:
+                        Welcome to the community! Your ${bonusAmount} points have been added to your account. Here's how to grow and withdraw your earnings:
                       </p>
 
                       <div style="text-align: left; margin: 30px 0;">
                         <div style="display: flex; align-items: start; margin-bottom: 20px;">
                           <div style="flex-shrink: 0; width: 40px; height: 40px; background: #667eea20; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-                            <span style="font-size: 20px;">🛍️</span>
+                            <span style="font-size: 20px;">📝</span>
                           </div>
                           <div>
-                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Shop Products</p>
-                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Use points to purchase products from our marketplace</p>
+                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Earn More Points</p>
+                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Post content, watch reels, comment, and engage with the community to earn points daily</p>
                           </div>
                         </div>
 
                         <div style="display: flex; align-items: start; margin-bottom: 20px;">
                           <div style="flex-shrink: 0; width: 40px; height: 40px; background: #667eea20; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-                            <span style="font-size: 20px;">⬆️</span>
+                            <span style="font-size: 20px;">💰</span>
                           </div>
                           <div>
-                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Boost Your Content</p>
-                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Promote your posts and reels to reach more people</p>
+                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Withdraw to Your Bank</p>
+                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Your points become withdrawable after reaching the minimum withdrawal threshold of 1,000 points</p>
                           </div>
                         </div>
 
                         <div style="display: flex; align-items: start;">
                           <div style="flex-shrink: 0; width: 40px; height: 40px; background: #667eea20; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-                            <span style="font-size: 20px;">🎁</span>
+                            <span style="font-size: 20px;">👑</span>
                           </div>
                           <div>
-                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Unlock Premium Features</p>
-                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Access exclusive features and benefits</p>
+                            <p style="margin: 0; color: #333333; font-weight: 600; font-size: 16px;">Subscribe to Unlock Withdrawals</p>
+                            <p style="margin: 5px 0 0 0; color: #666666; font-size: 14px;">Subscribe to any paid plan (starting at &#8358;200) to unlock withdrawal access</p>
                           </div>
                         </div>
                       </div>
@@ -368,7 +558,7 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-    text: `Welcome to LavLay, ${userName}! 🎉\n\nYour account has been created successfully and ${bonusAmount} points have been awarded to your account.\n\nWhat you can do with points:\n• Shop for products from our marketplace\n• Boost your content to reach more people\n• Unlock premium features\n\nStart exploring LavLay and earn more points by being active in the community!\n\n© ${new Date().getFullYear()} LavLay`
+    text: `Welcome to LavLay, ${userName}! 🎉\n\nYour account has been created successfully and ${bonusAmount} points have been awarded to your account.\n\nHow to grow and withdraw your earnings:\n• Post content, watch reels, comment, and engage to earn points daily\n• Your points become withdrawable after reaching the minimum threshold of 1,000 points\n• Subscribe to any paid plan (starting at ₦200) to unlock withdrawal access\n\nStart exploring LavLay and earn more points by being active in the community!\n\n© ${new Date().getFullYear()} LavLay`
   })
 }
 
@@ -446,6 +636,41 @@ export async function sendSignupBonusEmail(
   bonusAmount: number
 ) {
   const template = emailTemplates.signupBonus(userName, bonusAmount)
+  return sendEmail({
+    to: userEmail,
+    ...template
+  })
+}
+
+/**
+ * Helper function to send withdrawal approved notification
+ */
+export async function sendWithdrawalApprovedEmail(
+  userEmail: string,
+  userName: string,
+  amount: number,
+  currency: string,
+  withdrawalMethod: string,
+  accountDetails: string
+) {
+  const template = emailTemplates.withdrawalApproved(userName, amount, currency, withdrawalMethod, accountDetails)
+  return sendEmail({
+    to: userEmail,
+    ...template
+  })
+}
+
+/**
+ * Helper function to send withdrawal rejected notification
+ */
+export async function sendWithdrawalRejectedEmail(
+  userEmail: string,
+  userName: string,
+  amount: number,
+  currency: string,
+  reason: string
+) {
+  const template = emailTemplates.withdrawalRejected(userName, amount, currency, reason)
   return sendEmail({
     to: userEmail,
     ...template

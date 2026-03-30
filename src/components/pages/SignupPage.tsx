@@ -3,15 +3,17 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
 
 export function SignupPage() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -20,10 +22,19 @@ export function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    referralCode: '',
   });
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-fill referral code from URL parameter (?ref=CODE)
+  useEffect(() => {
+    const refCode = searchParams.get('ref');
+    if (refCode) {
+      setFormData(prev => ({ ...prev, referralCode: refCode }));
+    }
+  }, [searchParams]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +57,7 @@ export function SignupPage() {
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
-      await signUp({
+      const result = await signUp({
         email: formData.email,
         password: formData.password,
         username: formData.username,
@@ -54,6 +65,23 @@ export function SignupPage() {
         phone_number: formData.phoneNumber,
       });
       console.log('✅ SignupPage: Signup successful');
+
+      // Track referral if code was provided
+      if (formData.referralCode.trim() && result?.user) {
+        try {
+          const { error: refError } = await supabase.rpc('track_referral', {
+            p_referee_id: result.user.id,
+            p_referral_code: formData.referralCode.trim().toUpperCase(),
+          });
+          if (refError) {
+            console.error('Referral tracking error:', refError);
+          } else {
+            console.log('✅ Referral tracked successfully');
+          }
+        } catch (refErr) {
+          console.error('Failed to track referral:', refErr);
+        }
+      }
 
       // Send welcome email (don't await - send in background)
       sendWelcomeEmail(formData.email, fullName).catch(err =>
@@ -217,6 +245,19 @@ export function SignupPage() {
                     onChange={handleChange}
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="referralCode">Referral Code (Optional)</Label>
+                  <Input
+                    id="referralCode"
+                    type="text"
+                    placeholder="Enter referral code"
+                    value={formData.referralCode}
+                    onChange={handleChange}
+                    className="uppercase"
+                  />
+                  <p className="text-xs text-gray-500">Have a referral code? Enter it to reward your friend!</p>
                 </div>
 
                 <div className="flex items-center space-x-2">

@@ -266,7 +266,7 @@ export function ReferralDashboardPage() {
               <div className="text-2xl font-bold">
                 {formatCurrency(stats?.total_money_earned || 0)}
               </div>
-              <p className="text-xs text-muted-foreground">5% commission</p>
+              <p className="text-xs text-muted-foreground">10% commission</p>
             </CardContent>
           </Card>
 
@@ -297,7 +297,7 @@ export function ReferralDashboardPage() {
           <CardHeader>
             <CardTitle>Your Referral Code</CardTitle>
             <CardDescription>
-              Share your code with friends and earn 20 points per signup + 5% commission
+              Share your code with friends and earn 400 points per signup + 10% commission
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -369,7 +369,7 @@ export function ReferralDashboardPage() {
                 </div>
                 <h3 className="font-semibold mb-2">They Sign Up</h3>
                 <p className="text-sm text-gray-600">
-                  When they sign up using your code, you earn 20 points instantly
+                  When they sign up using your code, you earn 400 points instantly
                 </p>
               </div>
               <div className="flex flex-col items-center text-center">
@@ -378,7 +378,7 @@ export function ReferralDashboardPage() {
                 </div>
                 <h3 className="font-semibold mb-2">Earn Commission</h3>
                 <p className="text-sm text-gray-600">
-                  Earn 50 points + 5% of their deposits (first 10 deposits per referral)
+                  Earn 100 points + 10% of their deposits (first 10 deposits per referral)
                 </p>
               </div>
             </div>

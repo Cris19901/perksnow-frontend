@@ -1,4 +1,5 @@
-import { Search, Home, Store, Bell, MessageCircle, ShoppingCart, Menu, User, Settings, Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Home, Store, Bell, MessageCircle, ShoppingCart, Menu, User, Settings, Plus, X } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Input } from './ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -7,6 +8,7 @@ import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './ui/sheet';
 import { CurrencySwitcher } from './CurrencySwitcher';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +17,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface HeaderProps {
   onCartClick?: () => void;
   cartItemsCount?: number;
+}
+
+interface SearchResult {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url: string;
 }
 
 export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
@@ -26,6 +36,66 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const currentPage = location.pathname.slice(1) || 'feed';
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Search users
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .or(`username.ilike.%${searchQuery}%,full_name.ilike.%${searchQuery}%`)
+          .limit(10);
+
+        if (error) throw error;
+        setSearchResults(data || []);
+        setShowSearchResults(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
+
+  const handleUserClick = (username: string) => {
+    navigate(`/profile/${username}`);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setShowMobileSearch(false);
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -49,15 +119,43 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
             <span className="hidden sm:block font-semibold text-lg">LavLay</span>
           </Link>
 
-          {/* Search - Hidden on mobile */}
-          <div className="hidden md:flex flex-1 max-w-md mx-4">
+          {/* Desktop Search */}
+          <div className="hidden md:flex flex-1 max-w-md mx-4" ref={searchRef}>
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 type="text"
-                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search users..."
                 className="pl-10 bg-gray-50 border-gray-200"
               />
+
+              {/* Search Results Dropdown */}
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                  {isSearching ? (
+                    <div className="p-4 text-center text-gray-500">Searching...</div>
+                  ) : (
+                    searchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        onClick={() => handleUserClick(result.username)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={result.avatar_url} />
+                          <AvatarFallback>{result.full_name[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="text-left">
+                          <p className="font-semibold text-sm">{result.full_name}</p>
+                          <p className="text-xs text-gray-500">@{result.username}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -144,7 +242,15 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
 
           {/* Mobile Navigation */}
           <div className="flex md:hidden items-center gap-2">
-            <button 
+            {/* Mobile Search Button */}
+            <button
+              onClick={() => setShowMobileSearch(true)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Search users"
+            >
+              <Search className="w-6 h-6" />
+            </button>
+            <button
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
               onClick={onCartClick}
             >
@@ -241,6 +347,60 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
           </div>
         </div>
       </div>
+
+      {/* Mobile Search Modal */}
+      <Dialog open={showMobileSearch} onOpenChange={setShowMobileSearch}>
+        <DialogContent className="w-full max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Search Users</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search users..."
+                className="pl-10"
+                autoFocus
+              />
+            </div>
+
+            {/* Search Results */}
+            <div className="max-h-96 overflow-y-auto">
+              {isSearching ? (
+                <div className="p-4 text-center text-gray-500">Searching...</div>
+              ) : searchQuery.trim().length < 2 ? (
+                <div className="p-4 text-center text-gray-500">
+                  Type at least 2 characters to search
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">No users found</div>
+              ) : (
+                <div className="space-y-2">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => handleUserClick(result.username)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={result.avatar_url} />
+                        <AvatarFallback>{result.full_name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="text-left">
+                        <p className="font-semibold">{result.full_name}</p>
+                        <p className="text-sm text-gray-500">@{result.username}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

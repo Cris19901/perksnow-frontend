@@ -17,7 +17,8 @@ import {
   Gift,
   UserPlus,
   Star,
-  Shield
+  Shield,
+  ClipboardList
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -62,12 +63,11 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
         .rpc('get_admin_dashboard_stats');
 
       if (error) {
-        // If user is not admin, they'll get an error here
-        if (error.message.includes('Only admins')) {
+        // Check for permission/access errors (RPC raises exception or 403)
+        const msg = error.message?.toLowerCase() || '';
+        if (error.code === '42501' || msg.includes('admin') || msg.includes('permission') || msg.includes('denied')) {
           logger.error('Access denied: Admin privileges required');
           toast.error('Access denied. You need admin privileges.');
-          // Optionally redirect to home
-          // navigate('/');
           return;
         }
         throw error;
@@ -93,6 +93,7 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
     green: { bg: 'bg-green-100', text: 'text-green-600' },
     pink: { bg: 'bg-pink-100', text: 'text-pink-600' },
     red: { bg: 'bg-red-100', text: 'text-red-600' },
+    orange: { bg: 'bg-orange-100', text: 'text-orange-600' },
     gray: { bg: 'bg-gray-100', text: 'text-gray-600' }
   } as const;
 
@@ -152,6 +153,14 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       color: 'red' as const,
       path: '/admin/moderation',
       stats: 'Manage content'
+    },
+    {
+      title: 'Audit Log',
+      description: 'View admin actions and accountability trail',
+      icon: ClipboardList,
+      color: 'orange' as const,
+      path: '/admin/audit-log',
+      stats: 'Admin actions'
     },
     {
       title: 'General Settings',

@@ -20,7 +20,7 @@ export function MobileBottomNav() {
     }
   }, [user]);
 
-  const fetchUserPoints = async () => {
+  const fetchUserPoints = async (retryCount = 0) => {
     if (!user?.id) {
       console.log('❌ MobileBottomNav: No user ID, skipping points fetch');
       return;
@@ -35,6 +35,13 @@ export function MobileBottomNav() {
         .single();
 
       if (error) {
+        // Retry on network errors
+        if (error.message?.includes('Failed to fetch') && retryCount < 2) {
+          console.log(`🔄 MobileBottomNav: Retrying points fetch (attempt ${retryCount + 1}/2)`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return fetchUserPoints(retryCount + 1);
+        }
+
         console.error('❌ MobileBottomNav: Error fetching points:', error);
         // Don't throw, just set to 0
         setPointsBalance(0);
@@ -43,6 +50,13 @@ export function MobileBottomNav() {
       console.log('✅ MobileBottomNav: Points fetched:', data?.points_balance || 0);
       setPointsBalance(data?.points_balance || 0);
     } catch (err) {
+      // Retry on network exceptions
+      if (retryCount < 2) {
+        console.log(`🔄 MobileBottomNav: Retrying points fetch after exception (attempt ${retryCount + 1}/2)`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return fetchUserPoints(retryCount + 1);
+      }
+
       console.error('❌ MobileBottomNav: Exception fetching user points:', err);
       // Set default points on error so component still works
       setPointsBalance(0);

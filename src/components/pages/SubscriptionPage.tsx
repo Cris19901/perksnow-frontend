@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { CheckCircle2, Crown, Loader2, Zap, X, BadgeCheck, Clock } from 'lucide-react';
+import { CheckCircle2, Crown, Loader2, Zap, X, BadgeCheck, Clock, History } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SubscriptionPlan {
@@ -27,6 +27,18 @@ interface UserSubscription {
   expires_at: string | null;
 }
 
+interface PastSubscription {
+  id: string;
+  plan_name: string;
+  status: string;
+  amount: number;
+  currency: string;
+  billing_cycle: string;
+  activated_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
 export default function SubscriptionPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +46,8 @@ export default function SubscriptionPage() {
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [pastSubscriptions, setPastSubscriptions] = useState<PastSubscription[]>([]);
+  const [hasUsedDailyPlan, setHasUsedDailyPlan] = useState(false);
 
   useEffect(() => {
     loadPlansAndSubscription();
@@ -65,6 +79,17 @@ export default function SubscriptionPage() {
           status: userData.subscription_status,
           expires_at: userData.subscription_expires_at,
         });
+
+        // Fetch subscription history
+        const { data: subsData, error: subsError } = await supabase
+          .from('subscriptions')
+          .select('id, plan_name, status, amount, currency, billing_cycle, activated_at, expires_at, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!subsError && subsData) {
+          setPastSubscriptions(subsData);
+        }
       }
     } catch (error: any) {
       console.error('Error loading plans:', error);
@@ -85,10 +110,23 @@ export default function SubscriptionPage() {
       return;
     }
 
+    if (planName === 'daily' && hasUsedDailyPlan) {
+      toast.error('The Daily plan can only be purchased once. Please choose a longer plan.');
+      return;
+    }
+
     try {
       setSubscribing(planId);
 
+      // Validate plan exists and has a valid price
       const selectedPlan = plans.find(p => p.id === planId);
+      if (!selectedPlan) {
+        throw new Error('Selected plan not found. Please refresh and try again.');
+      }
+      if (!selectedPlan.price_monthly || selectedPlan.price_monthly <= 0) {
+        throw new Error('Invalid plan price. Please select a valid plan.');
+      }
+
       const { data: subscription, error: subError } = await supabase
         .from('subscriptions')
         .insert({
@@ -97,7 +135,7 @@ export default function SubscriptionPage() {
           plan_name: planName,
           status: 'pending',
           billing_cycle: 'monthly',
-          amount: selectedPlan?.price_monthly || 0,
+          amount: selectedPlan.price_monthly,
           currency: 'NGN',
           payment_provider: 'paystack',
           payment_status: 'pending',
@@ -107,7 +145,10 @@ export default function SubscriptionPage() {
 
       if (subError) throw subError;
 
-      const reference = `SUB_${planName.toUpperCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      // Generate cryptographically secure reference
+      const randomBytes = crypto.getRandomValues(new Uint8Array(8));
+      const randomHex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const reference = `SUB_${planName.toUpperCase()}_${Date.now()}_${randomHex}`;
 
       const { error: txError } = await supabase
         .from('payment_transactions')
@@ -279,6 +320,10 @@ export default function SubscriptionPage() {
             <Button variant="outline" className="w-full" disabled>
               {isCurrentPlan ? 'Current Plan' : 'Default Plan'}
             </Button>
+          ) : isDaily && hasUsedDailyPlan ? (
+            <Button variant="outline" className="w-full" disabled>
+              Already Used (One-Time Only)
+            </Button>
           ) : isCurrentPlan && userSubscription?.status === 'active' ? (
             <Button
               className="w-full"
@@ -296,7 +341,7 @@ export default function SubscriptionPage() {
             </Button>
           ) : (
             <Button
-              className={`w-full ${isPro ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isBasic ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''} ${isDaily ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+              className={`w-full ${isPro ? '!bg-purple-600 hover:!bg-purple-700 !text-white' : ''} ${isBasic ? '!bg-blue-600 hover:!bg-blue-700 !text-white' : ''} ${isDaily ? '!bg-black hover:!bg-gray-800 !text-white' : ''}`}
               onClick={() => handleSubscribe(plan.id, plan.name)}
               disabled={subscribing === plan.id}
             >
@@ -326,6 +371,7 @@ export default function SubscriptionPage() {
   // Get plans in order
   const freePlan = plans.find(p => p.name === 'free');
   const dailyPlan = plans.find(p => p.name === 'daily');
+  const weeklyPlan = plans.find(p => p.name === 'weekly');
   const starterPlan = plans.find(p => p.name === 'starter');
   const basicPlan = plans.find(p => p.name === 'basic');
   const proPlan = plans.find(p => p.name === 'pro');
@@ -364,10 +410,11 @@ export default function SubscriptionPage() {
         )}
       </div>
 
-      {/* Subscription Cards - 5 columns on large screens */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-16">
+      {/* Subscription Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-16">
         {freePlan && renderPlanCard(freePlan)}
         {dailyPlan && renderPlanCard(dailyPlan)}
+        {weeklyPlan && renderPlanCard(weeklyPlan)}
         {starterPlan && renderPlanCard(starterPlan)}
         {basicPlan && renderPlanCard(basicPlan)}
         {proPlan && renderPlanCard(proPlan)}
@@ -383,6 +430,7 @@ export default function SubscriptionPage() {
                 <th className="text-left py-3 px-2 font-semibold">Feature</th>
                 <th className="text-center py-3 px-2 font-semibold">Free</th>
                 <th className="text-center py-3 px-2 font-semibold bg-green-50">Daily</th>
+                <th className="text-center py-3 px-2 font-semibold bg-orange-50">Weekly</th>
                 <th className="text-center py-3 px-2 font-semibold">Starter</th>
                 <th className="text-center py-3 px-2 font-semibold bg-blue-50">Basic</th>
                 <th className="text-center py-3 px-2 font-semibold bg-purple-50">Pro</th>
@@ -393,6 +441,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Price</td>
                 <td className="text-center py-3 px-2">Free</td>
                 <td className="text-center py-3 px-2 bg-green-50/50">{formatPrice(200)}</td>
+                <td className="text-center py-3 px-2 bg-orange-50/50">{formatPrice(1000)}</td>
                 <td className="text-center py-3 px-2">{formatPrice(2000)}</td>
                 <td className="text-center py-3 px-2 bg-blue-50/50">{formatPrice(3000)}</td>
                 <td className="text-center py-3 px-2 bg-purple-50/50">{formatPrice(10000)}</td>
@@ -401,6 +450,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Duration</td>
                 <td className="text-center py-3 px-2">Forever</td>
                 <td className="text-center py-3 px-2 bg-green-50/50">1 day</td>
+                <td className="text-center py-3 px-2 bg-orange-50/50">7 days</td>
                 <td className="text-center py-3 px-2">15 days</td>
                 <td className="text-center py-3 px-2 bg-blue-50/50">30 days</td>
                 <td className="text-center py-3 px-2 bg-purple-50/50">30 days</td>
@@ -409,6 +459,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Posts/day</td>
                 <td className="text-center py-3 px-2">4</td>
                 <td className="text-center py-3 px-2 bg-green-50/50">10</td>
+                <td className="text-center py-3 px-2 bg-orange-50/50">20</td>
                 <td className="text-center py-3 px-2">20</td>
                 <td className="text-center py-3 px-2 bg-blue-50/50">20</td>
                 <td className="text-center py-3 px-2 bg-purple-50/50">50</td>
@@ -417,6 +468,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Comments/day</td>
                 <td className="text-center py-3 px-2">20</td>
                 <td className="text-center py-3 px-2 bg-green-50/50">30</td>
+                <td className="text-center py-3 px-2 bg-orange-50/50">25</td>
                 <td className="text-center py-3 px-2">30</td>
                 <td className="text-center py-3 px-2 bg-blue-50/50">50</td>
                 <td className="text-center py-3 px-2 bg-purple-50/50">100</td>
@@ -425,14 +477,16 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Unlimited Likes</td>
                 <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-orange-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
               </tr>
               <tr className="border-b">
                 <td className="py-3 px-2">Earn Points</td>
-                <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 text-xs text-gray-400">After 1st sub</td>
                 <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-orange-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
@@ -441,6 +495,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Withdraw Earnings</td>
                 <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-green-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-orange-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-blue-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
@@ -451,6 +506,7 @@ export default function SubscriptionPage() {
                 </td>
                 <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-green-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-orange-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-blue-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
@@ -459,6 +515,7 @@ export default function SubscriptionPage() {
                 <td className="py-3 px-2">Priority Support</td>
                 <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-green-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                <td className="text-center py-3 px-2 bg-orange-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-blue-50/50"><X className="w-4 h-4 text-gray-400 mx-auto" /></td>
                 <td className="text-center py-3 px-2 bg-purple-50/50"><CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" /></td>
@@ -467,6 +524,77 @@ export default function SubscriptionPage() {
           </table>
         </div>
       </div>
+
+      {/* Subscription History */}
+      {user && pastSubscriptions.length > 0 && (
+        <div className="mb-16 max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6 text-center flex items-center justify-center gap-2">
+            <History className="w-6 h-6" />
+            Subscription History
+          </h2>
+          <div className="space-y-3">
+            {pastSubscriptions.map((sub) => {
+              const isActive = sub.status === 'active' && sub.expires_at && new Date(sub.expires_at) > new Date();
+              const isExpired = sub.status === 'active' && sub.expires_at && new Date(sub.expires_at) <= new Date();
+              const isPending = sub.status === 'pending';
+
+              return (
+                <Card key={sub.id} className={isActive ? 'border-green-300 bg-green-50/30' : ''}>
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          sub.plan_name === 'pro' ? 'bg-purple-600' :
+                          sub.plan_name === 'basic' ? 'bg-blue-600' :
+                          sub.plan_name === 'starter' ? 'bg-indigo-500' :
+                          sub.plan_name === 'weekly' ? 'bg-orange-500' :
+                          sub.plan_name === 'daily' ? 'bg-green-600' :
+                          'bg-gray-400'
+                        }`}>
+                          {sub.plan_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold capitalize">{sub.plan_name} Plan</p>
+                          <p className="text-xs text-gray-500">
+                            {sub.activated_at
+                              ? `Activated ${new Date(sub.activated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                              : `Created ${new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {sub.expires_at && (
+                          <div className="text-right text-sm">
+                            <p className="text-gray-500">
+                              {isActive ? 'Expires' : 'Expired'}
+                            </p>
+                            <p className={`font-medium ${isActive ? 'text-green-700' : 'text-gray-600'}`}>
+                              {new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="text-right">
+                          <p className="font-semibold">{formatPrice(sub.amount)}</p>
+                        </div>
+
+                        <Badge
+                          variant={isActive ? 'default' : isPending ? 'secondary' : 'outline'}
+                          className={isActive ? 'bg-green-600' : isExpired ? 'border-orange-300 text-orange-600' : ''}
+                        >
+                          {isActive ? 'Active' : isExpired ? 'Expired' : isPending ? 'Pending' : sub.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* FAQs */}
       <div className="max-w-2xl mx-auto">
@@ -500,7 +628,7 @@ export default function SubscriptionPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-400">
-                All paid subscribers (Daily, Starter, Basic, Pro) can withdraw earnings. Minimum withdrawal amount is ₦5,000.
+                All paid subscribers (Daily, Starter, Basic, Pro) can withdraw earnings. Points mature after 7 days before they can be withdrawn. Minimum withdrawal is 5,000 points.
               </p>
             </CardContent>
           </Card>

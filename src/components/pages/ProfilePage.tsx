@@ -9,7 +9,7 @@ import { Post } from '../Post';
 import { ProductCard } from '../ProductCard';
 import { ActivityPost } from '../ActivityPost';
 import { MobileBottomNav } from '../MobileBottomNav';
-import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus, UserPlus, UserCheck, Loader2, BadgeCheck } from 'lucide-react';
+import { Settings, MapPin, Link as LinkIcon, Calendar, Store, Users, Heart, Camera, Plus, UserPlus, UserCheck, Loader2, BadgeCheck, Video } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +30,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [reels, setReels] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +155,27 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
       if (productsError) throw productsError;
       console.log('✅ ProfilePage: Products fetched:', productsData?.length || 0);
       setProducts(productsData || []);
+
+      // Fetch user's reels (using targetUserId)
+      const { data: reelsData, error: reelsError } = await supabase
+        .from('reels')
+        .select(`
+          id,
+          video_url,
+          thumbnail_url,
+          caption,
+          duration,
+          created_at,
+          views_count,
+          likes_count,
+          comments_count
+        `)
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false });
+
+      if (reelsError) throw reelsError;
+      console.log('✅ ProfilePage: Reels fetched:', reelsData?.length || 0);
+      setReels(reelsData || []);
 
       // Fetch user's activities (profile/cover updates)
       const { data: activitiesData, error: activitiesError } = await supabase
@@ -603,6 +625,10 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                     <p className="text-xl sm:text-2xl font-bold">{products.length}</p>
                     <p className="text-sm text-gray-500">Products</p>
                   </div>
+                  <div className="text-center">
+                    <p className="text-xl sm:text-2xl font-bold">{reels.length}</p>
+                    <p className="text-sm text-gray-500">Reels</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -613,6 +639,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         <Tabs defaultValue="posts" className="space-y-6">
           <TabsList className="bg-white border border-gray-200 w-full sm:w-auto">
             <TabsTrigger value="posts" className="flex-1 sm:flex-initial">Posts</TabsTrigger>
+            <TabsTrigger value="reels" className="flex-1 sm:flex-initial">Reels</TabsTrigger>
             <TabsTrigger value="products" className="flex-1 sm:flex-initial">Products</TabsTrigger>
             <TabsTrigger value="about" className="flex-1 sm:flex-initial">About</TabsTrigger>
           </TabsList>
@@ -674,6 +701,56 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                     }
                   })}
               </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="reels">
+            {reels.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                <Video className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <p className="text-gray-600">No reels yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
+                {reels.map((reel) => (
+                  <div
+                    key={reel.id}
+                    className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden cursor-pointer group"
+                    onClick={() => {
+                      // Navigate to reel viewer with this specific reel
+                      if (onNavigate) {
+                        onNavigate(`reels?id=${reel.id}`);
+                      }
+                    }}
+                  >
+                    {/* Thumbnail */}
+                    <img
+                      src={reel.thumbnail_url}
+                      alt={reel.caption || 'Reel'}
+                      className="w-full h-full object-cover"
+                    />
+
+                    {/* Overlay on hover */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Video className="w-12 h-12 text-white" />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                      <div className="flex items-center gap-2 text-white text-sm">
+                        <div className="flex items-center gap-1">
+                          <Heart className="w-4 h-4" />
+                          <span>{reel.likes_count || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Camera className="w-4 h-4" />
+                          <span>{reel.views_count || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </TabsContent>
 
