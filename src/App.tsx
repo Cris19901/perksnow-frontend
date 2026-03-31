@@ -1,40 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LandingPage } from './components/pages/LandingPage';
-import { LoginPage } from './components/pages/LoginPage';
-import { SignupPage } from './components/pages/SignupPage';
-import { AboutPage } from './components/pages/AboutPage';
-import { FeedPage } from './components/pages/FeedPage';
-import { MarketplacePage } from './components/pages/MarketplacePage';
-import { ProfilePage } from './components/pages/ProfilePage';
-import { MessagesPage } from './components/pages/MessagesPage';
-import { NotificationsPage } from './components/pages/NotificationsPage';
-import { CreateProductPage } from './components/pages/CreateProductPage';
-import { CheckoutPage } from './components/pages/CheckoutPage';
-import { SettingsPage } from './components/pages/SettingsPage';
-import { ReelsPage } from './components/pages/ReelsPage';
-import { PointsPage } from './components/pages/PointsPage';
-import { AdminWithdrawalsPage } from './components/pages/AdminWithdrawalsPage';
-import { AdminSettingsPage } from './components/pages/AdminSettingsPage';
-import { AdminDashboard } from './components/pages/AdminDashboard';
-import { AdminPointSettingsPage } from './components/pages/AdminPointSettingsPage';
-import { AdminReferralSettingsPage } from './components/pages/AdminReferralSettingsPage';
-import { AdminSignupBonusPage } from './components/pages/AdminSignupBonusPage';
-import { AdminUserManagementPage } from './components/pages/AdminUserManagementPage';
-import AdminContentModerationPage from './components/pages/AdminContentModerationPage';
-import { AdminAuditLogPage } from './components/pages/AdminAuditLogPage';
-import { AdminSubscriptionAnalytics } from './components/pages/AdminSubscriptionAnalytics';
-import { HashtagPage } from './components/pages/HashtagPage';
-import { PeoplePage } from './components/pages/PeoplePage';
-import SubscriptionPage from './components/pages/SubscriptionPage';
-import PaymentCallbackPage from './components/pages/PaymentCallbackPage';
-import PaymentHistoryPage from './components/pages/PaymentHistoryPage';
-import { ReferralDashboardPage } from './components/pages/ReferralDashboardPage';
-import { WithdrawPage } from './components/pages/WithdrawPage';
-import { VerifyWithdrawalPage } from './components/pages/VerifyWithdrawalPage';
-import DiagnosticPage from './pages/DiagnosticPage';
+
+// Lazy-load all pages so they are code-split into separate chunks.
+// Only the chunk for the current route is downloaded by the browser.
+const LandingPage = lazy(() => import('./components/pages/LandingPage').then(m => ({ default: m.LandingPage })));
+const LoginPage = lazy(() => import('./components/pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const SignupPage = lazy(() => import('./components/pages/SignupPage').then(m => ({ default: m.SignupPage })));
+const AboutPage = lazy(() => import('./components/pages/AboutPage').then(m => ({ default: m.AboutPage })));
+const FeedPage = lazy(() => import('./components/pages/FeedPage').then(m => ({ default: m.FeedPage })));
+const MarketplacePage = lazy(() => import('./components/pages/MarketplacePage').then(m => ({ default: m.MarketplacePage })));
+const ProfilePage = lazy(() => import('./components/pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const MessagesPage = lazy(() => import('./components/pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
+const NotificationsPage = lazy(() => import('./components/pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const CreateProductPage = lazy(() => import('./components/pages/CreateProductPage').then(m => ({ default: m.CreateProductPage })));
+const CheckoutPage = lazy(() => import('./components/pages/CheckoutPage').then(m => ({ default: m.CheckoutPage })));
+const SettingsPage = lazy(() => import('./components/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const ReelsPage = lazy(() => import('./components/pages/ReelsPage').then(m => ({ default: m.ReelsPage })));
+const PointsPage = lazy(() => import('./components/pages/PointsPage').then(m => ({ default: m.PointsPage })));
+const HashtagPage = lazy(() => import('./components/pages/HashtagPage').then(m => ({ default: m.HashtagPage })));
+const PeoplePage = lazy(() => import('./components/pages/PeoplePage').then(m => ({ default: m.PeoplePage })));
+const ReferralDashboardPage = lazy(() => import('./components/pages/ReferralDashboardPage').then(m => ({ default: m.ReferralDashboardPage })));
+const WithdrawPage = lazy(() => import('./components/pages/WithdrawPage').then(m => ({ default: m.WithdrawPage })));
+const VerifyWithdrawalPage = lazy(() => import('./components/pages/VerifyWithdrawalPage').then(m => ({ default: m.VerifyWithdrawalPage })));
+const SubscriptionPage = lazy(() => import('./components/pages/SubscriptionPage'));
+const PaymentCallbackPage = lazy(() => import('./components/pages/PaymentCallbackPage'));
+const PaymentHistoryPage = lazy(() => import('./components/pages/PaymentHistoryPage'));
+const DiagnosticPage = lazy(() => import('./pages/DiagnosticPage'));
+// Admin pages — only loaded if user navigates to /admin/*
+const AdminDashboard = lazy(() => import('./components/pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const AdminWithdrawalsPage = lazy(() => import('./components/pages/AdminWithdrawalsPage').then(m => ({ default: m.AdminWithdrawalsPage })));
+const AdminSettingsPage = lazy(() => import('./components/pages/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
+const AdminPointSettingsPage = lazy(() => import('./components/pages/AdminPointSettingsPage').then(m => ({ default: m.AdminPointSettingsPage })));
+const AdminReferralSettingsPage = lazy(() => import('./components/pages/AdminReferralSettingsPage').then(m => ({ default: m.AdminReferralSettingsPage })));
+const AdminSignupBonusPage = lazy(() => import('./components/pages/AdminSignupBonusPage').then(m => ({ default: m.AdminSignupBonusPage })));
+const AdminUserManagementPage = lazy(() => import('./components/pages/AdminUserManagementPage').then(m => ({ default: m.AdminUserManagementPage })));
+const AdminContentModerationPage = lazy(() => import('./components/pages/AdminContentModerationPage'));
+const AdminAuditLogPage = lazy(() => import('./components/pages/AdminAuditLogPage').then(m => ({ default: m.AdminAuditLogPage })));
+const AdminSubscriptionAnalytics = lazy(() => import('./components/pages/AdminSubscriptionAnalytics').then(m => ({ default: m.AdminSubscriptionAnalytics })));
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -290,6 +294,11 @@ function AppContent() {
         />
       )}
 
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        </div>
+      }>
       <Routes>
         {/* Public routes - redirect logged-in users to feed */}
         <Route path="/" element={
@@ -604,6 +613,7 @@ function AppContent() {
         {/* Payment callback must be public - user session may not be ready after redirect */}
         <Route path="/subscription/callback" element={<PaymentCallbackPage />} />
       </Routes>
+      </Suspense>
 
       <CartSheet
         open={isCartOpen}
