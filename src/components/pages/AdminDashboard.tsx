@@ -16,9 +16,11 @@ import {
   CheckCircle,
   Gift,
   UserPlus,
-  Star,
   Shield,
-  ClipboardList
+  ClipboardList,
+  UserCheck,
+  Video,
+  Ban
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -34,9 +36,15 @@ interface AdminDashboardProps {
 
 interface Stats {
   totalUsers: number;
-  totalPoints: number;
+  newUsersToday: number;
+  newUsersThisWeek: number;
+  activeSubscriptions: number;
   pendingWithdrawals: number;
   totalWithdrawals: number;
+  totalWithdrawnNgn: number;
+  totalPosts: number;
+  totalReels: number;
+  bannedUsers: number;
 }
 
 export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: AdminDashboardProps) {
@@ -45,9 +53,15 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
-    totalPoints: 0,
+    newUsersToday: 0,
+    newUsersThisWeek: 0,
+    activeSubscriptions: 0,
     pendingWithdrawals: 0,
-    totalWithdrawals: 0
+    totalWithdrawals: 0,
+    totalWithdrawnNgn: 0,
+    totalPosts: 0,
+    totalReels: 0,
+    bannedUsers: 0,
   });
 
   useEffect(() => {
@@ -74,10 +88,16 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       }
 
       setStats({
-        totalUsers: stats?.totalUsers || 0,
-        totalPoints: stats?.totalPoints || 0,
-        pendingWithdrawals: stats?.pendingWithdrawals || 0,
-        totalWithdrawals: stats?.totalWithdrawals || 0
+        totalUsers:          stats?.totalUsers          || 0,
+        newUsersToday:       stats?.newUsersToday       || 0,
+        newUsersThisWeek:    stats?.newUsersThisWeek    || 0,
+        activeSubscriptions: stats?.activeSubscriptions || 0,
+        pendingWithdrawals:  stats?.pendingWithdrawals  || 0,
+        totalWithdrawals:    stats?.totalWithdrawals    || 0,
+        totalWithdrawnNgn:   stats?.totalWithdrawnNgn   || 0,
+        totalPosts:          stats?.totalPosts          || 0,
+        totalReels:          stats?.totalReels          || 0,
+        bannedUsers:         stats?.bannedUsers         || 0,
       });
     } catch (err) {
       logger.error('Error fetching stats:', err);
@@ -186,11 +206,8 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
             <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-2" />
             <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {Array.from({ length: 8 }).map((_, i) => <StatCardSkeleton key={i} />)}
           </div>
         </div>
       </div>
@@ -214,46 +231,94 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card className="p-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Users</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.totalUsers}</p>
+                <p className="text-xs text-gray-500 mb-0.5">Total Users</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.totalUsers.toLocaleString()}</p>
+                <p className="text-xs text-green-600 mt-1">+{stats.newUsersToday} today</p>
               </div>
-              <Users className="w-12 h-12 text-blue-200" />
+              <Users className="w-10 h-10 text-blue-100" />
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Points</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {stats.totalPoints.toLocaleString()}
+                <p className="text-xs text-gray-500 mb-0.5">New This Week</p>
+                <p className="text-2xl font-bold text-indigo-600">{stats.newUsersThisWeek.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">Last 7 days</p>
+              </div>
+              <UserPlus className="w-10 h-10 text-indigo-100" />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Active Subscribers</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.activeSubscriptions.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">Paid tiers</p>
+              </div>
+              <UserCheck className="w-10 h-10 text-purple-100" />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Banned Users</p>
+                <p className="text-2xl font-bold text-red-600">{stats.bannedUsers.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">Suspended</p>
+              </div>
+              <Ban className="w-10 h-10 text-red-100" />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Pending Withdrawals</p>
+                <p className="text-2xl font-bold text-amber-600">{stats.pendingWithdrawals}</p>
+                <p className="text-xs text-gray-400 mt-1">Needs review</p>
+              </div>
+              <AlertCircle className="w-10 h-10 text-amber-100" />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Total Paid Out</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ₦{(stats.totalWithdrawnNgn / 1000).toFixed(1)}k
                 </p>
+                <p className="text-xs text-gray-400 mt-1">{stats.totalWithdrawals} transactions</p>
               </div>
-              <Zap className="w-12 h-12 text-purple-200" />
+              <DollarSign className="w-10 h-10 text-green-100" />
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Pending Requests</p>
-                <p className="text-3xl font-bold text-amber-600">{stats.pendingWithdrawals}</p>
+                <p className="text-xs text-gray-500 mb-0.5">Total Posts</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.totalPosts.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">All time</p>
               </div>
-              <AlertCircle className="w-12 h-12 text-amber-200" />
+              <FileText className="w-10 h-10 text-blue-100" />
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Withdrawals</p>
-                <p className="text-3xl font-bold text-green-600">{stats.totalWithdrawals}</p>
+                <p className="text-xs text-gray-500 mb-0.5">Total Reels</p>
+                <p className="text-2xl font-bold text-pink-600">{stats.totalReels.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">Video content</p>
               </div>
-              <CheckCircle className="w-12 h-12 text-green-200" />
+              <Video className="w-10 h-10 text-pink-100" />
             </div>
           </Card>
         </div>
