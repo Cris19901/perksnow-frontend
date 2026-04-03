@@ -191,13 +191,13 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
         const adminUser = (await supabase.auth.getUser()).data.user;
         if (adminUser) {
           await supabase.from('admin_audit_log').insert({
-            admin_id: adminUser.id,
-            action: `withdrawal_${status}`,
-            target_user_id: selectedWithdrawal.user_id,
+            admin_id:           adminUser.id,
+            action:             status === 'rejected' ? 'reject_withdrawal' : 'approve_withdrawal',
+            target_user_id:     selectedWithdrawal.user_id,
             target_resource_id: selectedWithdrawal.id,
             details: {
-              amount: selectedWithdrawal.amount,
-              currency: selectedWithdrawal.currency,
+              amount:      selectedWithdrawal.amount,
+              currency:    selectedWithdrawal.currency,
               admin_notes: adminNotes.trim() || null,
             },
           });

@@ -61,25 +61,6 @@ interface User {
   phone: string | null;
 }
 
-// Log admin action to audit table (fire-and-forget, never blocks the action)
-async function logAdminAction(
-  action: string,
-  targetUserId: string,
-  details: Record<string, any> = {},
-  targetResourceId?: string
-) {
-  try {
-    await supabase.from('admin_audit_log').insert({
-      admin_id: (await supabase.auth.getUser()).data.user?.id,
-      action,
-      target_user_id: targetUserId,
-      target_resource_id: targetResourceId || null,
-      details,
-    });
-  } catch (err) {
-    console.error('Audit log failed (non-blocking):', err);
-  }
-}
 
 export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCount }: AdminUserManagementPageProps) {
   const { user } = useAuth();
@@ -259,22 +240,22 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
     try {
       setActionLoading(userId);
 
-      const { error } = await supabase
-        .from('users')
-        .update({ is_banned: shouldBan })
-        .eq('id', userId);
+      const adminId = (await supabase.auth.getUser()).data.user?.id;
+      const { error } = await supabase.rpc('admin_ban_user', {
+        p_admin_id:   adminId,
+        p_user_id:    userId,
+        p_should_ban: shouldBan,
+        p_reason:     null,
+      });
 
       if (error) throw error;
 
-      logAdminAction(shouldBan ? 'ban_user' : 'unban_user', userId, {
-        username: selectedUser?.username,
-      });
       toast.success(shouldBan ? 'User banned successfully' : 'User unbanned successfully');
       fetchUsers();
       fetchGlobalStats();
     } catch (err: any) {
       console.error('Error banning user:', err);
-      toast.error('Failed to update user status');
+      toast.error(err.message || 'Failed to update user status');
     } finally {
       setActionLoading(null);
       setShowBanDialog(false);
@@ -286,52 +267,28 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
     try {
       setActionLoading(userId);
 
-      // Calculate expiration based on tier
-      const expiresAt = new Date();
-      switch (tier) {
-        case 'daily':
-          expiresAt.setDate(expiresAt.getDate() + 1); // 1 day
-          break;
-        case 'starter':
-          expiresAt.setDate(expiresAt.getDate() + 15); // 15 days
-          break;
-        case 'basic':
-        case 'pro':
-          expiresAt.setMonth(expiresAt.getMonth() + 1); // 30 days
-          break;
-        default:
-          expiresAt.setMonth(expiresAt.getMonth() + 1); // Default 30 days
-      }
-
-      const { error } = await supabase
-        .from('users')
-        .update({
-          subscription_tier: tier,
-          subscription_status: 'active',
-          subscription_expires_at: expiresAt.toISOString()
-        })
-        .eq('id', userId);
+      const adminId = (await supabase.auth.getUser()).data.user?.id;
+      const { error } = await supabase.rpc('admin_upgrade_user', {
+        p_admin_id: adminId,
+        p_user_id:  userId,
+        p_tier:     tier,
+        p_reason:   null,
+      });
 
       if (error) throw error;
 
-      logAdminAction('upgrade_user', userId, {
-        username: selectedUser?.username,
-        previous_tier: selectedUser?.subscription_tier,
-        new_tier: tier,
-        expires_at: expiresAt.toISOString(),
-      });
       const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
       toast.success(`User upgraded to ${tierName} successfully`);
       fetchUsers();
       fetchGlobalStats();
     } catch (err: any) {
       console.error('Error upgrading user:', err);
-      toast.error('Failed to upgrade user');
+      toast.error(err.message || 'Failed to upgrade user');
     } finally {
       setActionLoading(null);
       setShowUpgradeDialog(false);
       setSelectedUser(null);
-      setSelectedTier('pro'); // Reset to default
+      setSelectedTier('pro');
     }
   };
 
@@ -339,28 +296,21 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
     try {
       setActionLoading(userId);
 
-      const { error } = await supabase
-        .from('users')
-        .update({
-          subscription_tier: 'free',
-          subscription_status: 'inactive',
-          subscription_expires_at: null
-        })
-        .eq('id', userId);
+      const adminId = (await supabase.auth.getUser()).data.user?.id;
+      const { error } = await supabase.rpc('admin_downgrade_user', {
+        p_admin_id: adminId,
+        p_user_id:  userId,
+        p_reason:   null,
+      });
 
       if (error) throw error;
 
-      logAdminAction('downgrade_user', userId, {
-        username: selectedUser?.username,
-        previous_tier: selectedUser?.subscription_tier,
-        new_tier: 'free',
-      });
       toast.success('User downgraded to Free successfully');
       fetchUsers();
       fetchGlobalStats();
     } catch (err: any) {
       console.error('Error downgrading user:', err);
-      toast.error('Failed to downgrade user');
+      toast.error(err.message || 'Failed to downgrade user');
     } finally {
       setActionLoading(null);
       setShowDowngradeDialog(false);
