@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
 import {
   DollarSign,
   Check,
@@ -13,7 +14,9 @@ import {
   Clock,
   Users,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -64,6 +67,9 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
   const [stats, setStats] = useState<Stats>({ pending: 0, approved: 0, completed: 0, rejected: 0, totalAmount: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('pending');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [searchUser, setSearchUser] = useState('');
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
@@ -73,7 +79,7 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
     if (user) {
       fetchWithdrawals();
     }
-  }, [user, filter]);
+  }, [user, filter, dateFrom, dateTo, searchUser]);
 
   const fetchWithdrawals = async () => {
     try {
@@ -93,6 +99,14 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
 
       if (filter !== 'all') {
         query = query.eq('status', filter);
+      }
+
+      if (dateFrom) {
+        query = query.gte('created_at', dateFrom);
+      }
+      if (dateTo) {
+        // Include the full end date by going to end of day
+        query = query.lte('created_at', `${dateTo}T23:59:59`);
       }
 
       const { data: withdrawalsData, error } = await query;
@@ -219,6 +233,38 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
     }
   };
 
+  const exportToCSV = () => {
+    const rows = withdrawals.map(w => [
+      w.id,
+      w.user?.username || '',
+      w.user?.email || '',
+      w.amount,
+      w.currency,
+      w.status,
+      w.withdrawal_method,
+      w.bank_name || '',
+      w.account_number || '',
+      w.account_name || '',
+      w.admin_notes || '',
+      formatDate(w.created_at),
+      w.processed_at ? formatDate(w.processed_at) : '',
+    ]);
+
+    const header = ['ID', 'Username', 'Email', 'Amount', 'Currency', 'Status', 'Method', 'Bank/Network', 'Account No', 'Account Name', 'Admin Notes', 'Requested At', 'Processed At'];
+    const csv = [header, ...rows]
+      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `withdrawals-${filter}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${withdrawals.length} rows to CSV`);
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'pending':
@@ -326,8 +372,9 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
         </div>
 
         {/* Filters */}
-        <Card className="p-4 mb-6">
-          <div className="flex flex-wrap gap-2">
+        <Card className="p-4 mb-6 space-y-3">
+          {/* Status filter + export */}
+          <div className="flex flex-wrap items-center gap-2">
             {(['all', 'pending', 'processing', 'completed', 'rejected'] as const).map((status) => (
               <button
                 key={status}
@@ -341,6 +388,57 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
                 {status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
             ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToCSV}
+              disabled={withdrawals.length === 0}
+              className="ml-auto"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+
+          {/* Date range + user search */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1">
+              <Label className="text-xs text-gray-500 whitespace-nowrap">From</Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="h-8 text-sm w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <Label className="text-xs text-gray-500 whitespace-nowrap">To</Label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="h-8 text-sm w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1 flex-1 min-w-48">
+              <Search className="w-4 h-4 text-gray-400 shrink-0" />
+              <Input
+                placeholder="Search username..."
+                value={searchUser}
+                onChange={e => setSearchUser(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            {(dateFrom || dateTo || searchUser) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setDateFrom(''); setDateTo(''); setSearchUser(''); }}
+                className="text-xs text-gray-500"
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
         </Card>
 
@@ -362,7 +460,11 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
             </div>
           ) : (
             <div className="space-y-3">
-              {withdrawals.map((withdrawal) => (
+              {withdrawals.filter(w =>
+                !searchUser ||
+                (w.user?.username || '').toLowerCase().includes(searchUser.toLowerCase()) ||
+                (w.user?.email || '').toLowerCase().includes(searchUser.toLowerCase())
+              ).map((withdrawal) => (
                 <div
                   key={withdrawal.id}
                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-purple-300 transition-all"
