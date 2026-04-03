@@ -676,3 +676,96 @@ export async function sendWithdrawalRejectedEmail(
     ...template
   })
 }
+
+/**
+ * Helper function to send account banned notification
+ */
+export async function sendAccountBannedEmail(
+  userEmail: string,
+  userName: string,
+  reason?: string
+) {
+  return sendEmail({
+    to: userEmail,
+    subject: 'Your LavLay account has been suspended',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f5f5f5;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                <tr><td style="background:#ef4444;padding:40px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:28px;">Account Suspended</h1>
+                </td></tr>
+                <tr><td style="padding:40px;">
+                  <p style="color:#333;font-size:16px;">Hi ${userName},</p>
+                  <p style="color:#555;font-size:16px;line-height:1.6;">
+                    Your LavLay account has been suspended due to a violation of our community guidelines.
+                  </p>
+                  ${reason ? `<p style="color:#555;font-size:16px;"><strong>Reason:</strong> ${reason}</p>` : ''}
+                  <p style="color:#555;font-size:16px;line-height:1.6;">
+                    If you believe this is a mistake, please contact our support team at <a href="mailto:support@lavlay.com">support@lavlay.com</a>.
+                  </p>
+                </td></tr>
+                <tr><td style="background-color:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
+                  <p style="color:#999;font-size:12px;margin:0;">© ${new Date().getFullYear()} LavLay</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+      </html>
+    `,
+    text: `Hi ${userName},\n\nYour LavLay account has been suspended.${reason ? '\n\nReason: ' + reason : ''}\n\nIf you believe this is a mistake, contact support@lavlay.com.\n\n© ${new Date().getFullYear()} LavLay`
+  })
+}
+
+/**
+ * Helper function to send subscription tier change notification
+ */
+export async function sendTierChangedEmail(
+  userEmail: string,
+  userName: string,
+  newTier: string,
+  action: 'upgraded' | 'downgraded'
+) {
+  const tierName = newTier.charAt(0).toUpperCase() + newTier.slice(1)
+  const isUpgrade = action === 'upgraded'
+  return sendEmail({
+    to: userEmail,
+    subject: `Your LavLay subscription has been ${action}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f5f5f5;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                <tr><td style="background:${isUpgrade ? 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)' : '#f59e0b'};padding:40px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:28px;">Subscription ${isUpgrade ? 'Upgraded' : 'Changed'}</h1>
+                </td></tr>
+                <tr><td style="padding:40px;">
+                  <p style="color:#333;font-size:16px;">Hi ${userName},</p>
+                  <p style="color:#555;font-size:16px;line-height:1.6;">
+                    Your LavLay subscription has been ${action} to the <strong>${tierName}</strong> plan.
+                  </p>
+                  ${isUpgrade ? `<p style="color:#555;font-size:16px;line-height:1.6;">Enjoy your new benefits! You can now access all ${tierName} features on LavLay.</p>` : '<p style="color:#555;font-size:16px;line-height:1.6;">Your account has been set to the Free plan. You can subscribe again anytime to restore full access.</p>'}
+                  <div style="text-align:center;margin:30px 0;">
+                    <a href="https://lavlay.com/subscription" style="display:inline-block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:30px;font-weight:600;font-size:16px;">
+                      View Subscription
+                    </a>
+                  </div>
+                </td></tr>
+                <tr><td style="background-color:#f9f9f9;padding:20px;text-align:center;border-top:1px solid #eee;">
+                  <p style="color:#999;font-size:12px;margin:0;">© ${new Date().getFullYear()} LavLay</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+      </html>
+    `,
+    text: `Hi ${userName},\n\nYour LavLay subscription has been ${action} to ${tierName}.\n\nVisit https://lavlay.com/subscription to view your plan.\n\n© ${new Date().getFullYear()} LavLay`
+  })
+}

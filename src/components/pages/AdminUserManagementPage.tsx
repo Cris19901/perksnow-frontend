@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { sendAccountBannedEmail, sendTierChangedEmail } from '@/lib/email';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -250,6 +251,11 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
 
       if (error) throw error;
 
+      // Email notification (fire-and-forget)
+      if (shouldBan && selectedUser?.email) {
+        sendAccountBannedEmail(selectedUser.email, selectedUser.username).catch(() => {});
+      }
+
       toast.success(shouldBan ? 'User banned successfully' : 'User unbanned successfully');
       fetchUsers();
       fetchGlobalStats();
@@ -276,6 +282,11 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
       });
 
       if (error) throw error;
+
+      // Email notification (fire-and-forget)
+      if (selectedUser?.email) {
+        sendTierChangedEmail(selectedUser.email, selectedUser.username, tier, 'upgraded').catch(() => {});
+      }
 
       const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
       toast.success(`User upgraded to ${tierName} successfully`);
@@ -304,6 +315,11 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
       });
 
       if (error) throw error;
+
+      // Email notification (fire-and-forget)
+      if (selectedUser?.email) {
+        sendTierChangedEmail(selectedUser.email, selectedUser.username, 'free', 'downgraded').catch(() => {});
+      }
 
       toast.success('User downgraded to Free successfully');
       fetchUsers();
