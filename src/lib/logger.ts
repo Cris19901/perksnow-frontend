@@ -3,6 +3,7 @@
  * Prevents console spam and security leaks in production
  * Stores recent errors in-memory for admin review
  */
+import * as Sentry from '@sentry/react';
 
 const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
 
@@ -32,6 +33,13 @@ export const logger = {
    */
   error: (message: string, error?: any) => {
     console.error(`[ERROR] ${message}`, error);
+
+    // Send to Sentry (if DSN configured)
+    if (error instanceof Error) {
+      Sentry.captureException(error, { extra: { message } });
+    } else if (error) {
+      Sentry.captureMessage(`${message}: ${error?.message || String(error)}`, 'error');
+    }
 
     // Store in error buffer
     errorBuffer.push({
