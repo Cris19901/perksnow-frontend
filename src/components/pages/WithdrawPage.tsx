@@ -39,6 +39,18 @@ interface WithdrawalRequest {
 
 const MINIMUM_WITHDRAWAL = 1000; // ₦1,000 minimum
 
+const WITHDRAWAL_METHODS = [
+  { value: 'bank',        label: 'Bank Transfer',  isMobile: false },
+  { value: 'opay',        label: 'OPay',            isMobile: true  },
+  { value: 'palmpay',     label: 'PalmPay',         isMobile: true  },
+  { value: 'kuda',        label: 'Kuda Bank',       isMobile: true  },
+  { value: 'mtn_momo',    label: 'MTN MoMo',        isMobile: true  },
+  { value: 'airtel_money',label: 'Airtel Money',    isMobile: true  },
+];
+
+const isMobileMethod = (method: string) =>
+  WITHDRAWAL_METHODS.find(m => m.value === method)?.isMobile ?? false;
+
 export function WithdrawPage() {
   const { user } = useAuth();
   const [walletBalance, setWalletBalance] = useState(0);
@@ -123,9 +135,16 @@ export function WithdrawPage() {
       return;
     }
 
-    if (!bankName || !accountNumber || !accountName) {
-      toast.error('Please fill in all bank details');
-      return;
+    if (isMobileMethod(withdrawalMethod)) {
+      if (!accountNumber || !accountName) {
+        toast.error('Please fill in your phone number and account name');
+        return;
+      }
+    } else {
+      if (!bankName || !accountNumber || !accountName) {
+        toast.error('Please fill in all bank details');
+        return;
+      }
     }
 
     try {
@@ -265,7 +284,7 @@ export function WithdrawPage() {
             <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
               <li>Minimum withdrawal: {formatCurrency(MINIMUM_WITHDRAWAL)}</li>
               <li>Processing time: 1-3 business days</li>
-              <li>Bank transfers only (Nigeria)</li>
+              <li>Bank transfer, OPay, PalmPay, Kuda, MTN MoMo, Airtel Money</li>
               <li>Verify your bank details carefully</li>
             </ul>
           </AlertDescription>
@@ -312,38 +331,52 @@ export function WithdrawPage() {
                 {/* Withdrawal Method */}
                 <div>
                   <Label htmlFor="method">Withdrawal Method</Label>
-                  <Select value={withdrawalMethod} onValueChange={setWithdrawalMethod}>
+                  <Select
+                    value={withdrawalMethod}
+                    onValueChange={(val) => {
+                      setWithdrawalMethod(val);
+                      setBankName('');
+                      setAccountNumber('');
+                      setAccountName('');
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="bank">Bank Transfer</SelectItem>
-                      <SelectItem value="opay">OPay</SelectItem>
+                      {WITHDRAWAL_METHODS.map(m => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Bank Name */}
-                <div>
-                  <Label htmlFor="bank">Bank Name</Label>
-                  <Input
-                    id="bank"
-                    placeholder="e.g., Access Bank, GTBank, UBA"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    required
-                  />
-                </div>
+                {/* Bank-specific fields */}
+                {!isMobileMethod(withdrawalMethod) && (
+                  <div>
+                    <Label htmlFor="bank">Bank Name</Label>
+                    <Input
+                      id="bank"
+                      placeholder="e.g., Access Bank, GTBank, UBA"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
 
-                {/* Account Number */}
+                {/* Account Number / Phone Number */}
                 <div>
-                  <Label htmlFor="account">Account Number</Label>
+                  <Label htmlFor="account">
+                    {isMobileMethod(withdrawalMethod) ? 'Phone Number' : 'Account Number'}
+                  </Label>
                   <Input
                     id="account"
-                    placeholder="10-digit account number"
+                    placeholder={isMobileMethod(withdrawalMethod) ? '08012345678' : '10-digit account number'}
                     value={accountNumber}
                     onChange={(e) => setAccountNumber(e.target.value)}
-                    maxLength={10}
+                    maxLength={isMobileMethod(withdrawalMethod) ? 11 : 10}
+                    type={isMobileMethod(withdrawalMethod) ? 'tel' : 'text'}
                     required
                   />
                 </div>
