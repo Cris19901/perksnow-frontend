@@ -185,50 +185,20 @@ export function AdminUserManagementPage({ onNavigate, onCartClick, cartItemsCoun
     try {
       setLoading(true);
 
-      // Build query
-      let query = supabase
-        .from('users')
-        .select('*', { count: 'exact' })
-        .order(sortBy, { ascending: sortAsc });
-
-      // Apply search filter (sanitize input to prevent PostgREST filter injection)
-      if (searchQuery) {
-        const sanitized = searchQuery
-          .replace(/[%_.*,()]/g, '') // Remove PostgREST special chars
-          .trim()
-          .slice(0, 100); // Limit length
-        if (sanitized) {
-          query = query.or(`username.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
-        }
-      }
-
-      // Apply banned filter
-      if (filterBanned === 'banned') {
-        query = query.eq('is_banned', true);
-      } else if (filterBanned === 'active') {
-        query = query.eq('is_banned', false);
-      }
-
-      // Apply tier filter
-      if (filterTier !== 'all') {
-        if (filterTier === 'paid') {
-          query = query.neq('subscription_tier', 'free');
-        } else {
-          query = query.eq('subscription_tier', filterTier);
-        }
-      }
-
-      // Apply pagination
-      const from = (currentPage - 1) * usersPerPage;
-      const to = from + usersPerPage - 1;
-      query = query.range(from, to);
-
-      const { data, error, count } = await query;
+      const { data, error } = await supabase.rpc('admin_search_users', {
+        p_search:    searchQuery.trim().slice(0, 100) || null,
+        p_tier:      filterTier,
+        p_banned:    filterBanned,
+        p_sort_by:   sortBy,
+        p_sort_asc:  sortAsc,
+        p_page:      currentPage,
+        p_per_page:  usersPerPage,
+      });
 
       if (error) throw error;
 
-      setUsers(data || []);
-      setTotalUsers(count || 0);
+      setUsers((data?.users as User[]) || []);
+      setTotalUsers(data?.total || 0);
     } catch (err: any) {
       console.error('Error fetching users:', err);
       toast.error('Failed to load users');
