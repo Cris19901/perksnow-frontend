@@ -44,7 +44,7 @@ const corsHeaders = {
 };
 
 // --- Groq (primary, free) ---
-async function callGroq(messages: { role: string; content: string }[]): Promise<string> {
+async function callGroq(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -53,7 +53,7 @@ async function callGroq(messages: { role: string; content: string }[]): Promise<
     },
     body: JSON.stringify({
       model: 'llama-3.1-70b-versatile',
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
       max_tokens: 600,
       temperature: 0.4,
     }),
@@ -64,7 +64,7 @@ async function callGroq(messages: { role: string; content: string }[]): Promise<
 }
 
 // --- Claude Haiku (fallback, paid) ---
-async function callClaude(messages: { role: string; content: string }[]): Promise<string> {
+async function callClaude(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -75,7 +75,7 @@ async function callClaude(messages: { role: string; content: string }[]): Promis
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 600,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     }),
   });
@@ -84,18 +84,16 @@ async function callClaude(messages: { role: string; content: string }[]): Promis
   return data.content?.[0]?.text ?? '';
 }
 
-async function getAIReply(messages: { role: string; content: string }[]): Promise<string> {
-  // Try Groq first (free)
+async function getAIReply(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   if (GROQ_API_KEY) {
     try {
-      return await callGroq(messages);
+      return await callGroq(messages, systemPrompt);
     } catch (e) {
       console.warn('Groq failed, falling back to Claude:', e);
     }
   }
-  // Fall back to Claude
   if (ANTHROPIC_API_KEY) {
-    return await callClaude(messages);
+    return await callClaude(messages, systemPrompt);
   }
   throw new Error('No AI provider configured');
 }
@@ -118,7 +116,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { messages, ticket_id, user_id } = await req.json();
+    const { messages, ticket_id, user_id, user_context } = await req.json();
 
     if (!Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'messages array required' }), {
@@ -156,8 +154,30 @@ serve(async (req) => {
       }
     }
 
-    const rawText = await getAIReply(messages);
+    // Build a context-aware system prompt if user is signed in
+    let effectiveSystemPrompt = SYSTEM_PROMPT;
+    if (user_context) {
+      const maturedPoints = Math.floor(user_context.points * 0.7); // approx since we don't have exact frozen count here
+      effectiveSystemPrompt = SYSTEM_PROMPT + `\n\n--- CURRENT USER CONTEXT (do not ask for this info again) ---
+Name: ${user_context.name}
+Email: ${user_context.email}
+Subscription tier: ${user_context.tier}
+Points balance: ${user_context.points.toLocaleString()} pts (≈ ₦${(user_context.points / 10).toLocaleString()})
+Wallet balance: ₦${user_context.wallet.toLocaleString()}
+Can withdraw: ${user_context.tier !== 'free' ? 'Yes' : 'No (free tier)'}
+
+Use this context to give personalised answers (e.g. their exact balance, whether they can withdraw).
+Since you already know their name and email, do NOT ask for them again — set escalated=true and populate collected_info automatically when you have enough info to escalate.`;
+    }
+
+    const rawText = await getAIReply(messages, effectiveSystemPrompt);
     const parsed  = parseAIResponse(rawText);
+
+    // Auto-fill collected_info from user_context for signed-in users
+    if (user_context && parsed.escalated) {
+      parsed.collected_info.name  = parsed.collected_info.name  || user_context.name;
+      parsed.collected_info.email = parsed.collected_info.email || user_context.email;
+    }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     let finalTicketId = ticket_id;

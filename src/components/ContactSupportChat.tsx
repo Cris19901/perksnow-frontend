@@ -73,6 +73,9 @@ export function ContactSupportChat() {
   const [csatDone, setCsatDone]   = useState(false);
   const [unread, setUnread]       = useState(false);
   const [proactiveFired, setProactiveFired] = useState(false);
+  const [userContext, setUserContext] = useState<{
+    name: string; email: string; tier: string; points: number; wallet: number;
+  } | null>(null);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const realtimeCh = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -85,6 +88,27 @@ export function ContactSupportChat() {
       setTicketId(saved.ticketId);
     }
   }, []);
+
+  // Fetch user account context for AI personalisation
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('users')
+      .select('full_name, email, subscription_tier, points_balance, wallet_balance')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setUserContext({
+            name:   data.full_name || user.email?.split('@')[0] || 'User',
+            email:  user.email ?? data.email ?? '',
+            tier:   data.subscription_tier ?? 'free',
+            points: data.points_balance ?? 0,
+            wallet: data.wallet_balance ?? 0,
+          });
+        }
+      });
+  }, [user]);
 
   // Persist conversation
   useEffect(() => {
@@ -195,8 +219,9 @@ export function ContactSupportChat() {
           messages: nextMessages
             .filter((m) => m.role !== 'system')
             .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-          ticket_id: ticketId,
-          user_id:   user?.id ?? null,
+          ticket_id:    ticketId,
+          user_id:      user?.id ?? null,
+          user_context: userContext ?? null,
         },
       });
 

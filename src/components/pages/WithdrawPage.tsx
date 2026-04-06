@@ -39,13 +39,39 @@ interface WithdrawalRequest {
 
 const MINIMUM_WITHDRAWAL = 1000; // ₦1,000 minimum
 
+// Nigerian banks with Korapay bank codes
+const NIGERIAN_BANKS = [
+  { name: 'Access Bank',          code: '044' },
+  { name: 'First Bank',           code: '011' },
+  { name: 'GTBank',               code: '058' },
+  { name: 'UBA',                  code: '033' },
+  { name: 'Zenith Bank',          code: '057' },
+  { name: 'Fidelity Bank',        code: '070' },
+  { name: 'Union Bank',           code: '032' },
+  { name: 'Sterling Bank',        code: '232' },
+  { name: 'Stanbic IBTC',         code: '221' },
+  { name: 'FCMB',                 code: '214' },
+  { name: 'Polaris Bank',         code: '076' },
+  { name: 'Ecobank',              code: '050' },
+  { name: 'Heritage Bank',        code: '030' },
+  { name: 'Keystone Bank',        code: '082' },
+  { name: 'Providus Bank',        code: '101' },
+  { name: 'Jaiz Bank',            code: '301' },
+  { name: 'Wema Bank',            code: '035' },
+  { name: 'Kuda Bank',            code: '090267' },
+  { name: 'OPay',                 code: '100004' },
+  { name: 'PalmPay',              code: '100033' },
+  { name: 'Moniepoint',           code: '090405' },
+  { name: 'Carbon',               code: '565'    },
+];
+
 const WITHDRAWAL_METHODS = [
   { value: 'bank',        label: 'Bank Transfer',  isMobile: false },
+  { value: 'mtn_momo',    label: 'MTN MoMo',        isMobile: true  },
+  { value: 'airtel_money',label: 'Airtel Money',    isMobile: true  },
   { value: 'opay',        label: 'OPay',            isMobile: true  },
   { value: 'palmpay',     label: 'PalmPay',         isMobile: true  },
   { value: 'kuda',        label: 'Kuda Bank',       isMobile: true  },
-  { value: 'mtn_momo',    label: 'MTN MoMo',        isMobile: true  },
-  { value: 'airtel_money',label: 'Airtel Money',    isMobile: true  },
 ];
 
 const isMobileMethod = (method: string) =>
@@ -60,6 +86,7 @@ export function WithdrawPage() {
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [userNotes, setUserNotes] = useState('');
+  const [bankCode, setBankCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loadingWithdrawals, setLoadingWithdrawals] = useState(true);
@@ -141,8 +168,8 @@ export function WithdrawPage() {
         return;
       }
     } else {
-      if (!bankName || !accountNumber || !accountName) {
-        toast.error('Please fill in all bank details');
+      if (!bankCode || !accountNumber || !accountName) {
+        toast.error('Please select your bank and fill in all account details');
         return;
       }
     }
@@ -158,10 +185,12 @@ export function WithdrawPage() {
           currency: 'NGN',
           withdrawal_method: withdrawalMethod,
           bank_name: bankName,
+          bank_code: bankCode || null,
           account_number: accountNumber,
           account_name: accountName,
           user_notes: userNotes,
           status: 'pending',
+          payout_provider: 'korapay',
         });
 
       if (error) throw error;
@@ -171,6 +200,7 @@ export function WithdrawPage() {
       // Reset form
       setAmount('');
       setBankName('');
+      setBankCode('');
       setAccountNumber('');
       setAccountName('');
       setUserNotes('');
@@ -354,14 +384,24 @@ export function WithdrawPage() {
                 {/* Bank-specific fields */}
                 {!isMobileMethod(withdrawalMethod) && (
                   <div>
-                    <Label htmlFor="bank">Bank Name</Label>
-                    <Input
-                      id="bank"
-                      placeholder="e.g., Access Bank, GTBank, UBA"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="bank">Select Bank</Label>
+                    <Select
+                      value={bankCode}
+                      onValueChange={(val) => {
+                        setBankCode(val);
+                        const bank = NIGERIAN_BANKS.find(b => b.code === val);
+                        setBankName(bank?.name ?? '');
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose your bank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NIGERIAN_BANKS.map(b => (
+                          <SelectItem key={b.code} value={b.code}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 

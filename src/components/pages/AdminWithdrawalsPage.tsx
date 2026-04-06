@@ -151,14 +151,34 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
     try {
       setProcessing(true);
 
-      // Call the Supabase function to process withdrawal
-      const { data, error } = await supabase.rpc('process_wallet_withdrawal', {
-        p_withdrawal_id: selectedWithdrawal.id,
-        p_new_status: status,
-        p_admin_notes: adminNotes.trim() || null,
-        p_transaction_reference: null
-      });
+      if (status === 'completed') {
+        // Route through Korapay payout edge function
+        const { data: session } = await supabase.auth.getSession();
+        const token = session?.session?.access_token;
 
+        const { data: payoutData, error: payoutError } = await supabase.functions.invoke('korapay-payout', {
+          body: { withdrawal_id: selectedWithdrawal.id },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (payoutError || !payoutData?.success) {
+          throw new Error(payoutData?.error ?? payoutError?.message ?? 'Korapay payout failed');
+        }
+
+        toast.success(`Payout initiated via Korapay (ref: ${payoutData.reference})`);
+      } else {
+        // Reject: use existing RPC
+        const { error } = await supabase.rpc('process_wallet_withdrawal', {
+          p_withdrawal_id: selectedWithdrawal.id,
+          p_new_status: status,
+          p_admin_notes: adminNotes.trim() || null,
+          p_transaction_reference: null,
+        });
+        if (error) throw error;
+        toast.success(`Withdrawal ${status} successfully!`);
+      }
+
+      const error = null; // no further error to re-throw
       if (error) throw error;
 
       // Send email notification to user
@@ -220,7 +240,6 @@ export function AdminWithdrawalsPage({ onNavigate, onCartClick, cartItemsCount }
         console.error('Audit log failed (non-blocking):', auditErr);
       }
 
-      toast.success(`Withdrawal ${status} successfully!`);
       setShowDetailsModal(false);
       setSelectedWithdrawal(null);
       setAdminNotes('');
