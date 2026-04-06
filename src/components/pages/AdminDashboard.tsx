@@ -19,6 +19,7 @@ import {
   Shield,
   ClipboardList,
   UserCheck,
+  MessageCircle,
   Video,
   Ban
 } from 'lucide-react';
@@ -173,6 +174,14 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       color: 'red' as const,
       path: '/admin/moderation',
       stats: 'Manage content'
+    },
+    {
+      title: 'Support Inbox',
+      description: 'Manage customer chat tickets, take over from AI, reply as human agent',
+      icon: MessageCircle,
+      color: 'purple' as const,
+      path: '/admin/support',
+      stats: 'Customer support'
     },
     {
       title: 'Audit Log',
