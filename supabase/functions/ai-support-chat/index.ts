@@ -6,25 +6,34 @@ const ANTHROPIC_API_KEY    = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const SUPABASE_URL         = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-const SYSTEM_PROMPT = `You are LavLay's friendly support assistant. LavLay is a Nigerian social media platform where users earn points by engaging with content, and can withdraw earnings via bank transfer or mobile money.
+// Base system prompt — grounding rules first, platform facts second
+const BASE_SYSTEM_PROMPT = `You are the official support assistant for LavLay (lavlay.com), a Nigerian social media platform that pays users for engaging with content.
 
-Key facts about LavLay:
-- Users earn points by watching reels, reading posts, liking, and commenting
+STRICT GROUNDING RULES (must follow at all times):
+1. You ONLY answer questions about LavLay Nigeria (lavlay.com). Never confuse this with any other business, website, app, or entity that may share a similar name (e.g. there is a LavLay in New York — that is completely different and unrelated).
+2. You ONLY use information from the KNOWLEDGE BASE ARTICLES provided below. Do NOT use general knowledge, assumptions, or information from other sources.
+3. If a question cannot be answered using the provided knowledge base articles, say: "I don't have specific information about that. Let me connect you with our support team." Then collect name, email, and description and set escalated=true.
+4. Never make up policies, prices, or processes. If you are unsure, escalate.
+5. If the user asks about something unrelated to LavLay (e.g., general tech help, other apps, general finance), politely say you can only help with LavLay-related questions.
+
+PLATFORM QUICK FACTS (always true):
+- LavLay is 100% Nigerian — built for the Nigerian market, uses Nigerian Naira (₦)
 - Points convert to cash: 10 points = ₦1
-- Withdrawal minimum: ₦1,000 (10,000 points)
+- Withdrawal minimum: ₦1,000 (10,000 matured points)
 - Points mature after 7 days (frozen until then)
-- Subscription tiers: Free, Daily (1 day), Starter (15 days), Basic (30 days), Pro (30 days)
+- Subscription tiers: Free, Daily (1 day, one-time only), Starter (15 days), Basic (30 days), Pro (30 days)
 - Only paid subscribers (non-free) can withdraw
-- Referral system: earn points when friends sign up and make deposits (up to 10 deposits per referred user)
-- Withdrawal methods: bank transfer, MTN/Airtel/Glo/9mobile mobile money
+- Referral system: earn commission when friends sign up and make payments (up to 10 payments per referred user)
+- Withdrawal methods: bank transfer (22+ Nigerian banks), MTN/Airtel/OPay/PalmPay/Kuda mobile money
 - Support email: support@lavlay.com
 
-Your behaviour:
+YOUR BEHAVIOUR:
 1. Be friendly, concise, and helpful. Use simple English.
-2. Answer questions directly using the facts above.
-3. If you cannot resolve the issue (account-specific problems, bugs, payment disputes), collect the user's name, email, and a clear problem description, then set escalated=true.
-4. Once you have all three (name + email + description), confirm: "I've created a support ticket. A human agent will follow up within 24 hours."
-5. Never make up information. If unsure, say so and offer to escalate.
+2. Always check the KNOWLEDGE BASE ARTICLES below before answering. Use those as your primary source.
+3. Answer questions directly using knowledge base facts. Quote specific numbers/rules when relevant.
+4. If you cannot resolve the issue (account-specific problems, bugs, payment disputes), collect the user's name, email, and a clear problem description, then set escalated=true.
+5. Once you have all three (name + email + description), confirm: "I've created a support ticket. A human agent will follow up within 24 hours."
+6. Never make up information. If unsure, say so and offer to escalate.
 
 ALWAYS respond as valid JSON (no markdown, no code fences):
 {
@@ -43,6 +52,84 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// --- Search knowledge base via RPC ---
+async function searchKnowledgeBase(
+  supabase: ReturnType<typeof createClient>,
+  query: string,
+  limit = 3
+): Promise<{ title: string; content: string; category: string }[]> {
+  try {
+    const { data, error } = await supabase.rpc('search_knowledge_base', {
+      p_query: query,
+      p_limit: limit,
+      p_category: null,
+    });
+    if (error) {
+      console.warn('KB search error:', error.message);
+      return [];
+    }
+    return (data ?? []) as { title: string; content: string; category: string }[];
+  } catch (e) {
+    console.warn('KB search exception:', e);
+    return [];
+  }
+}
+
+// Build the context-injected system prompt with KB articles + optional user context
+function buildSystemPrompt(
+  articles: { title: string; content: string; category: string }[],
+  userContext?: {
+    name: string;
+    email: string;
+    tier: string;
+    points: number;
+    wallet: number;
+  }
+): string {
+  let prompt = BASE_SYSTEM_PROMPT;
+
+  // Inject retrieved knowledge base articles
+  if (articles.length > 0) {
+    prompt += '\n\n--- KNOWLEDGE BASE ARTICLES (use these to answer the question) ---\n';
+    articles.forEach((a, i) => {
+      prompt += `\n[Article ${i + 1}: ${a.title}]\n${a.content}\n`;
+    });
+    prompt += '\n--- END OF KNOWLEDGE BASE ARTICLES ---';
+  } else {
+    prompt += '\n\n[No matching knowledge base articles found for this query. Escalate if you cannot answer from the quick facts above.]';
+  }
+
+  // Inject personalised user context for signed-in users
+  if (userContext) {
+    const maturedApprox = Math.floor(userContext.points * 0.7);
+    prompt += `\n\n--- CURRENT USER CONTEXT (do not ask for this info again) ---
+Name: ${userContext.name}
+Email: ${userContext.email}
+Subscription tier: ${userContext.tier}
+Points balance: ${userContext.points.toLocaleString()} pts (≈ ₦${(userContext.points / 10).toLocaleString()})
+Estimated matured points: ~${maturedApprox.toLocaleString()} pts (≈ ₦${(maturedApprox / 10).toLocaleString()})
+Wallet balance: ₦${userContext.wallet.toLocaleString()}
+Can withdraw: ${userContext.tier !== 'free' ? 'Yes' : 'No (free tier — must upgrade to a paid plan first)'}
+
+Use this context to give personalised answers (e.g. their exact balance, tier, whether they can withdraw).
+Since you already know their name and email, do NOT ask for them again — set escalated=true and populate collected_info automatically when you have enough info to escalate.`;
+  }
+
+  return prompt;
+}
+
+// Extract a search query from the latest user message
+function extractSearchQuery(messages: { role: string; content: string }[]): string {
+  // Use the last user message as the search query
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      // Truncate to first 200 chars for the search query
+      return messages[i].content.slice(0, 200);
+    }
+  }
+  return '';
+}
+
 // --- Groq (primary, free) ---
 async function callGroq(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -54,8 +141,8 @@ async function callGroq(messages: { role: string; content: string }[], systemPro
     body: JSON.stringify({
       model: 'llama-3.1-70b-versatile',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      max_tokens: 600,
-      temperature: 0.4,
+      max_tokens: 700,
+      temperature: 0.3,
     }),
   });
   if (!res.ok) throw new Error(`Groq error ${res.status}: ${await res.text()}`);
@@ -74,7 +161,7 @@ async function callClaude(messages: { role: string; content: string }[], systemP
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 700,
       system: systemPrompt,
       messages,
     }),
@@ -124,9 +211,10 @@ serve(async (req) => {
       });
     }
 
-    // Check if ticket is in human mode — don't call AI, just acknowledge
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Check if ticket is in human mode — don't call AI, just save and acknowledge
     if (ticket_id) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       const { data: ticket } = await supabase
         .from('support_tickets')
         .select('mode')
@@ -134,7 +222,6 @@ serve(async (req) => {
         .single();
 
       if (ticket?.mode === 'human') {
-        // Save user message but don't auto-reply
         const lastMsg = messages[messages.length - 1];
         if (lastMsg?.role === 'user') {
           await supabase.from('support_messages').insert({
@@ -143,7 +230,6 @@ serve(async (req) => {
             content: lastMsg.content,
           });
           await supabase.from('support_tickets').update({
-            unread_agent_count: supabase.rpc('unread_agent_count', {}), // incremented by trigger
             last_message_at: new Date().toISOString(),
           }).eq('id', ticket_id);
         }
@@ -154,23 +240,17 @@ serve(async (req) => {
       }
     }
 
-    // Build a context-aware system prompt if user is signed in
-    let effectiveSystemPrompt = SYSTEM_PROMPT;
-    if (user_context) {
-      const maturedPoints = Math.floor(user_context.points * 0.7); // approx since we don't have exact frozen count here
-      effectiveSystemPrompt = SYSTEM_PROMPT + `\n\n--- CURRENT USER CONTEXT (do not ask for this info again) ---
-Name: ${user_context.name}
-Email: ${user_context.email}
-Subscription tier: ${user_context.tier}
-Points balance: ${user_context.points.toLocaleString()} pts (≈ ₦${(user_context.points / 10).toLocaleString()})
-Wallet balance: ₦${user_context.wallet.toLocaleString()}
-Can withdraw: ${user_context.tier !== 'free' ? 'Yes' : 'No (free tier)'}
+    // 1. Extract search query from latest user message
+    const searchQuery = extractSearchQuery(messages);
 
-Use this context to give personalised answers (e.g. their exact balance, whether they can withdraw).
-Since you already know their name and email, do NOT ask for them again — set escalated=true and populate collected_info automatically when you have enough info to escalate.`;
-    }
+    // 2. Search knowledge base (RAG retrieval)
+    const kbArticles = searchQuery ? await searchKnowledgeBase(supabase, searchQuery, 3) : [];
 
-    const rawText = await getAIReply(messages, effectiveSystemPrompt);
+    // 3. Build grounded system prompt with KB articles + user context
+    const systemPrompt = buildSystemPrompt(kbArticles, user_context ?? undefined);
+
+    // 4. Call AI with grounded prompt
+    const rawText = await getAIReply(messages, systemPrompt);
     const parsed  = parseAIResponse(rawText);
 
     // Auto-fill collected_info from user_context for signed-in users
@@ -179,7 +259,6 @@ Since you already know their name and email, do NOT ask for them again — set e
       parsed.collected_info.email = parsed.collected_info.email || user_context.email;
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     let finalTicketId = ticket_id;
 
     if (parsed.escalated && parsed.collected_info.name && parsed.collected_info.email) {
@@ -189,16 +268,16 @@ Since you already know their name and email, do NOT ask for them again — set e
         const { data: ticket } = await supabase
           .from('support_tickets')
           .insert({
-            user_id:     user_id ?? null,
-            name:        info.name,
-            email:       info.email,
-            category:    info.category ?? 'general',
-            subject:     info.description?.slice(0, 100) ?? 'Support request',
-            status:      'open',
-            priority:    'normal',
-            mode:        'ai',
-            escalated:   true,
-            ai_handled:  true,
+            user_id:    user_id ?? null,
+            name:       info.name,
+            email:      info.email,
+            category:   info.category ?? 'general',
+            subject:    info.description?.slice(0, 100) ?? 'Support request',
+            status:     'open',
+            priority:   'normal',
+            mode:       'ai',
+            escalated:  true,
+            ai_handled: true,
           })
           .select('id')
           .single();
@@ -214,7 +293,6 @@ Since you already know their name and email, do NOT ask for them again — set e
         }
       } else {
         await supabase.from('support_tickets').update({ escalated: true }).eq('id', ticket_id);
-        // Save latest AI reply
         await supabase.from('support_messages').insert({ ticket_id: finalTicketId, role: 'assistant', content: parsed.message });
       }
     } else if (ticket_id) {

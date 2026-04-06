@@ -39,6 +39,7 @@ const AdminUserManagementPage = lazy(() => import('./components/pages/AdminUserM
 const AdminContentModerationPage = lazy(() => import('./components/pages/AdminContentModerationPage'));
 const AdminAuditLogPage = lazy(() => import('./components/pages/AdminAuditLogPage').then(m => ({ default: m.AdminAuditLogPage })));
 const AdminSupportPage = lazy(() => import('./components/pages/AdminSupportPage').then(m => ({ default: m.AdminSupportPage })));
+const AdminKnowledgeBasePage = lazy(() => import('./components/pages/AdminKnowledgeBasePage').then(m => ({ default: m.AdminKnowledgeBasePage })));
 const AdminSubscriptionAnalytics = lazy(() => import('./components/pages/AdminSubscriptionAnalytics').then(m => ({ default: m.AdminSubscriptionAnalytics })));
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
@@ -570,6 +571,17 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminSupportPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/knowledge-base"
+          element={
+            <ProtectedRoute>
+              <AdminKnowledgeBasePage
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />

@@ -21,7 +21,8 @@ import {
   UserCheck,
   MessageCircle,
   Video,
-  Ban
+  Ban,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -182,6 +183,14 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       color: 'purple' as const,
       path: '/admin/support',
       stats: 'Customer support'
+    },
+    {
+      title: 'Knowledge Base',
+      description: 'Add and edit AI knowledge articles — what the support bot uses to answer questions',
+      icon: BookOpen,
+      color: 'blue' as const,
+      path: '/admin/knowledge-base',
+      stats: 'AI grounding'
     },
     {
       title: 'Audit Log',
