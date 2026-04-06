@@ -43,6 +43,7 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { CartSheet } from './components/CartSheet';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import PhoneVerificationBanner from './components/PhoneVerificationBanner';
+import { ContactSupportChat } from './components/ContactSupportChat';
 import { supabase } from './lib/supabase';
 import { toast, Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/react';
@@ -638,6 +639,7 @@ export default function App() {
       <AuthProvider>
         <CurrencyProvider>
           <AppContent />
+          <ContactSupportChat />
         </CurrencyProvider>
       </AuthProvider>
       {/* Vercel Analytics - tracks page views and events */}
