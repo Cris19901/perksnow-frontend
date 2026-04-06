@@ -2,32 +2,47 @@ import { Header } from '../Header';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
-import { Search, Send, MoreVertical, Phone, Video, Image, Smile, Inbox } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { ScrollArea } from '../ui/scroll-area';
+import { MobileBottomNav } from '../MobileBottomNav';
+import { Search, Send, ArrowLeft, Inbox, MessageSquarePlus } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface Conversation {
   id: string;
-  user: {
-    id: string;
-    name: string;
-    avatar: string | null;
-    online: boolean;
-  };
-  lastMessage: string;
-  timestamp: string;
-  unread: number;
+  last_message: string | null;
+  last_message_at: string;
+  my_unread: number;
+  other_user_id: string;
+  other_name: string | null;
+  other_username: string | null;
+  other_avatar: string | null;
 }
 
 interface Message {
   id: string;
+  conversation_id: string;
   sender_id: string;
   content: string;
+  is_read: boolean;
   created_at: string;
+}
+
+function avatarFor(avatar: string | null, id: string) {
+  return avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}`;
+}
+
+function displayName(conv: Conversation) {
+  return conv.other_name || conv.other_username || 'User';
+}
+
+function timeLabel(dateStr: string) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60)    return 'now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return new Date(dateStr).toLocaleDateString('en-NG', { month: 'short', day: 'numeric' });
 }
 
 interface MessagesPageProps {
@@ -39,282 +54,372 @@ interface MessagesPageProps {
 export function MessagesPage({ onNavigate, onCartClick, cartItemsCount }: MessagesPageProps) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [active, setActive] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [messageText, setMessageText] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState('');
+  const [search, setSearch] = useState('');
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
+  const [newUserSearch, setNewUserSearch] = useState('');
+  const [newUserResults, setNewUserResults] = useState<{ id: string; full_name: string | null; username: string | null; avatar_url: string | null }[]>([]);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchConversations();
+  const fetchConversations = useCallback(async () => {
+    if (!user) return;
+    try {
+      setLoadingConvs(true);
+      const { data, error } = await supabase
+        .from('my_conversations')
+        .select('*')
+        .order('last_message_at', { ascending: false });
+      if (error) throw error;
+      setConversations((data ?? []) as Conversation[]);
+    } catch (err: any) {
+      toast.error('Could not load conversations');
+    } finally {
+      setLoadingConvs(false);
     }
   }, [user]);
 
-  useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation.id);
-    }
-  }, [selectedConversation]);
-
-  const fetchConversations = async () => {
+  const fetchMessages = useCallback(async (convId: string) => {
     try {
-      setLoading(true);
-      // For now, show empty state
-      // In a real implementation, you would fetch from a conversations table
-      setConversations([]);
-    } catch (err) {
-      console.error('Error fetching conversations:', err);
-      toast.error('Failed to load conversations');
+      setLoadingMsgs(true);
+      const { data, error } = await supabase
+        .from('direct_messages')
+        .select('*')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setMessages((data ?? []) as Message[]);
+      // Mark as read
+      await supabase.rpc('mark_conversation_read', { p_conversation_id: convId });
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, my_unread: 0 } : c));
+    } catch {
+      toast.error('Could not load messages');
     } finally {
-      setLoading(false);
+      setLoadingMsgs(false);
     }
-  };
+  }, []);
 
-  const fetchMessages = async (conversationId: string) => {
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+  useEffect(() => {
+    if (active) fetchMessages(active.id);
+  }, [active, fetchMessages]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Realtime: new messages in active conversation
+  useEffect(() => {
+    if (!active) return;
+    const channel = supabase
+      .channel(`conv_${active.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `conversation_id=eq.${active.id}`,
+      }, (payload) => {
+        setMessages(prev => [...prev, payload.new as Message]);
+        // Mark read immediately since we're watching
+        supabase.rpc('mark_conversation_read', { p_conversation_id: active.id });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [active]);
+
+  // Realtime: update conversation list when new messages arrive in any conv
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('conv_list_realtime')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+      }, () => { fetchConversations(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchConversations]);
+
+  const sendMessage = async () => {
+    if (!text.trim() || !active || !user || sending) return;
+    const content = text.trim();
+    setText('');
+    setSending(true);
     try {
-      // For now, show empty state
-      // In a real implementation, you would fetch from a messages table
-      setMessages([]);
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-      toast.error('Failed to load messages');
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedConversation || !user) return;
-
-    try {
-      setSending(true);
-      // In a real implementation, you would insert into messages table
-      toast.info('Messaging feature coming soon!');
-      setMessageText('');
-    } catch (err) {
-      console.error('Error sending message:', err);
-      toast.error('Failed to send message');
+      const { error } = await supabase.from('direct_messages').insert({
+        conversation_id: active.id,
+        sender_id: user.id,
+        content,
+      });
+      if (error) throw error;
+    } catch {
+      toast.error('Failed to send');
+      setText(content);
     } finally {
       setSending(false);
     }
   };
 
-  const filteredConversations = conversations.filter((conv) =>
-    conv.user.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const getAvatarUrl = (avatarUrl: string | null, userId: string) => {
-    return avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+  const searchUsers = async (q: string) => {
+    setNewUserSearch(q);
+    if (q.length < 2) { setNewUserResults([]); return; }
+    const { data } = await supabase
+      .from('users')
+      .select('id, full_name, username, avatar_url')
+      .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+      .neq('id', user!.id)
+      .limit(8);
+    setNewUserResults(data ?? []);
   };
 
+  const startConversation = async (otherId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('get_or_create_conversation', { p_other_user_id: otherId });
+      if (error) throw error;
+      setShowNewChat(false);
+      setNewUserSearch('');
+      setNewUserResults([]);
+      await fetchConversations();
+      // Find and activate the new conversation
+      const { data: convs } = await supabase.from('my_conversations').select('*').eq('id', data).single();
+      if (convs) setActive(convs as Conversation);
+    } catch (err: any) {
+      toast.error('Could not start conversation: ' + err.message);
+    }
+  };
+
+  const filtered = conversations.filter(c =>
+    !search || displayName(c).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const showList = !active || !isMobile;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        onNavigate={onNavigate}
-        onCartClick={onCartClick}
-        cartItemsCount={cartItemsCount}
-        currentPage="messages"
-      />
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Header onNavigate={onNavigate} onCartClick={onCartClick} cartItemsCount={cartItemsCount} currentPage="messages" />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-[calc(100vh-150px)]">
-          <div className="grid md:grid-cols-[350px_1fr] h-full">
-            {/* Conversations List */}
-            <div className="border-r border-gray-200 flex flex-col">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-xl mb-4">Messages</h2>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    placeholder="Search conversations..."
-                    className="pl-10"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
+      <div className="flex-1 max-w-[1200px] w-full mx-auto px-0 sm:px-4 py-0 sm:py-4 pb-16 md:pb-0">
+        <div className="bg-white sm:rounded-xl sm:border border-gray-200 overflow-hidden h-[calc(100vh-112px)] md:h-[calc(100vh-88px)] flex">
 
-              <ScrollArea className="flex-1">
-                {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                  </div>
-                ) : filteredConversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                    <Inbox className="w-16 h-16 text-gray-300 mb-4" />
-                    <h3 className="font-semibold text-gray-900 mb-2">No messages yet</h3>
-                    <p className="text-sm text-gray-500 mb-4">
-                      Start connecting with people and your messages will appear here
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {filteredConversations.map((conversation) => (
+          {/* ---- Conversations sidebar ---- */}
+          <div className={`flex flex-col w-full md:w-[320px] md:border-r border-gray-200 flex-shrink-0 ${active ? 'hidden md:flex' : 'flex'}`}>
+            {/* Sidebar header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Messages</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title="New message"
+                onClick={() => setShowNewChat(v => !v)}
+              >
+                <MessageSquarePlus className="w-5 h-5 text-purple-600" />
+              </Button>
+            </div>
+
+            {/* New chat search */}
+            {showNewChat && (
+              <div className="px-3 py-2 border-b border-gray-100 bg-purple-50">
+                <Input
+                  placeholder="Search users to message…"
+                  value={newUserSearch}
+                  onChange={e => searchUsers(e.target.value)}
+                  autoFocus
+                  className="bg-white text-sm"
+                />
+                {newUserResults.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {newUserResults.map(u => (
                       <button
-                        key={conversation.id}
-                        onClick={() => setSelectedConversation(conversation)}
-                        className={`w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors ${
-                          selectedConversation?.id === conversation.id ? 'bg-purple-50' : ''
-                        }`}
+                        key={u.id}
+                        className="w-full flex items-center gap-2 p-2 hover:bg-white rounded-lg transition-colors text-left"
+                        onClick={() => startConversation(u.id)}
                       >
-                        <div className="relative">
-                          <Avatar>
-                            <AvatarImage src={getAvatarUrl(conversation.user.avatar, conversation.user.id)} />
-                            <AvatarFallback>{conversation.user.name[0].toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          {conversation.user.online && (
-                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="truncate font-medium">{conversation.user.name}</p>
-                            <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                              {conversation.timestamp}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm text-gray-500 truncate">{conversation.lastMessage}</p>
-                            {conversation.unread > 0 && (
-                              <Badge className="ml-2 bg-purple-600 flex-shrink-0">
-                                {conversation.unread}
-                              </Badge>
-                            )}
-                          </div>
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={avatarFor(u.avatar_url, u.id)} />
+                          <AvatarFallback>{(u.full_name || u.username || '?')[0].toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{u.full_name || u.username}</p>
+                          {u.username && <p className="text-xs text-gray-400">@{u.username}</p>}
                         </div>
                       </button>
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
+            )}
+
+            {/* Search bar */}
+            <div className="px-3 py-2 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  className="pl-9 h-9 text-sm bg-gray-50"
+                  placeholder="Search conversations…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* Chat Area */}
-            <div className="flex flex-col">
-              {selectedConversation ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <Avatar>
-                          <AvatarImage src={getAvatarUrl(selectedConversation.user.avatar, selectedConversation.user.id)} />
-                          <AvatarFallback>{selectedConversation.user.name[0].toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        {selectedConversation.user.online && (
-                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+            {/* Conversation list */}
+            <div className="flex-1 overflow-y-auto">
+              {loadingConvs ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center py-14 text-center px-4">
+                  <Inbox className="w-12 h-12 text-gray-200 mb-3" />
+                  <p className="font-medium text-gray-500 text-sm">No conversations yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Tap the icon above to start chatting</p>
+                </div>
+              ) : (
+                filtered.map(conv => (
+                  <button
+                    key={conv.id}
+                    onClick={() => setActive(conv)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 text-left ${active?.id === conv.id ? 'bg-purple-50' : ''}`}
+                  >
+                    <Avatar className="w-11 h-11 flex-shrink-0">
+                      <AvatarImage src={avatarFor(conv.other_avatar, conv.other_user_id)} />
+                      <AvatarFallback>{displayName(conv)[0]?.toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className={`text-sm truncate ${conv.my_unread > 0 ? 'font-semibold' : 'font-medium'}`}>
+                          {displayName(conv)}
+                        </p>
+                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                          {timeLabel(conv.last_message_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className={`text-xs truncate ${conv.my_unread > 0 ? 'text-gray-800 font-medium' : 'text-gray-500'}`}>
+                          {conv.last_message || 'Start a conversation'}
+                        </p>
+                        {conv.my_unread > 0 && (
+                          <span className="ml-2 flex-shrink-0 bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                            {conv.my_unread > 9 ? '9+' : conv.my_unread}
+                          </span>
                         )}
                       </div>
-                      <div>
-                        <p className="font-medium">{selectedConversation.user.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {selectedConversation.user.online ? 'Active now' : 'Offline'}
-                        </p>
-                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon">
-                        <Phone className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <Video className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="w-5 h-5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Messages */}
-                  <ScrollArea className="flex-1 p-4">
-                    {messages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                        <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mb-4">
-                          <Send className="w-8 h-8 text-purple-600" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 mb-2">Start the conversation</h3>
-                        <p className="text-sm text-gray-500">
-                          Send a message to {selectedConversation.user.name}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {messages.map((message) => (
-                          <div
-                            key={message.id}
-                            className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
-                          >
-                            <div
-                              className={`max-w-[70%] rounded-lg p-3 ${
-                                message.sender_id === user?.id
-                                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                                  : 'bg-gray-100 text-gray-900'
-                              }`}
-                            >
-                              <p className="text-sm">{message.content}</p>
-                              <p
-                                className={`text-xs mt-1 ${
-                                  message.sender_id === user?.id ? 'text-purple-100' : 'text-gray-500'
-                                }`}
-                              >
-                                {new Date(message.created_at).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-
-                  {/* Message Input */}
-                  <div className="p-4 border-t border-gray-200">
-                    <div className="flex items-end gap-2">
-                      <Button variant="ghost" size="icon" className="flex-shrink-0">
-                        <Image className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="flex-shrink-0">
-                        <Smile className="w-5 h-5" />
-                      </Button>
-                      <Input
-                        placeholder="Type a message..."
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && messageText.trim()) {
-                            handleSendMessage();
-                          }
-                        }}
-                        className="flex-1"
-                      />
-                      <Button
-                        className="bg-gradient-to-r from-purple-600 to-pink-600 flex-shrink-0"
-                        size="icon"
-                        disabled={!messageText.trim() || sending}
-                        onClick={handleSendMessage}
-                      >
-                        <Send className="w-5 h-5" />
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="w-24 h-24 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mb-6">
-                    <Inbox className="w-12 h-12 text-purple-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Your Messages</h3>
-                  <p className="text-gray-500 max-w-sm">
-                    Select a conversation from the sidebar to start chatting
-                  </p>
-                </div>
+                  </button>
+                ))
               )}
             </div>
           </div>
+
+          {/* ---- Chat panel ---- */}
+          <div className={`flex-1 flex flex-col min-w-0 ${!active ? 'hidden md:flex' : 'flex'}`}>
+            {active ? (
+              <>
+                {/* Chat header */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden h-8 w-8 -ml-1"
+                    onClick={() => setActive(null)}
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </Button>
+                  <Avatar className="w-9 h-9">
+                    <AvatarImage src={avatarFor(active.other_avatar, active.other_user_id)} />
+                    <AvatarFallback>{displayName(active)[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-semibold text-sm">{displayName(active)}</p>
+                    {active.other_username && (
+                      <p className="text-xs text-gray-400">@{active.other_username}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {loadingMsgs ? (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                      <div className="w-14 h-14 bg-purple-50 rounded-full flex items-center justify-center mb-3">
+                        <Send className="w-6 h-6 text-purple-400" />
+                      </div>
+                      <p className="font-medium text-gray-600 text-sm">Say hello to {displayName(active)}</p>
+                    </div>
+                  ) : (
+                    messages.map(msg => {
+                      const isMe = msg.sender_id === user?.id;
+                      return (
+                        <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[72%] rounded-2xl px-4 py-2 text-sm ${
+                            isMe
+                              ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-br-sm'
+                              : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+                          }`}>
+                            <p className="leading-snug">{msg.content}</p>
+                            <p className={`text-[10px] mt-1 ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="p-3 border-t border-gray-100 flex-shrink-0">
+                  <div className="flex items-end gap-2">
+                    <Input
+                      className="flex-1 min-h-[40px] text-sm resize-none"
+                      placeholder="Type a message…"
+                      value={text}
+                      onChange={e => setText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+                      }}
+                    />
+                    <Button
+                      size="icon"
+                      className="bg-gradient-to-br from-purple-600 to-pink-600 h-10 w-10 flex-shrink-0"
+                      disabled={!text.trim() || sending}
+                      onClick={sendMessage}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center px-8">
+                <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mb-5">
+                  <Inbox className="w-10 h-10 text-purple-300" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Your Messages</h3>
+                <p className="text-sm text-gray-400 max-w-xs">
+                  Select a conversation or start a new one using the icon at the top.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <MobileBottomNav currentPage="messages" onNavigate={onNavigate} />
     </div>
   );
 }
