@@ -283,12 +283,12 @@ export function ContactSupportChat() {
     seedGreeting();
   };
 
-  const chatWidth  = fullscreen ? 'w-full'      : 'w-[380px]';
-  const chatHeight = fullscreen ? 'h-[100dvh]'  : 'max-h-[580px]';
+  const chatWidth  = fullscreen ? 'w-full'      : 'w-[calc(100vw-2rem)] sm:w-[380px]';
+  const chatHeight = fullscreen ? 'h-[100dvh]'  : 'max-h-[70dvh] sm:max-h-[580px]';
   const chatPos    = fullscreen ? 'bottom-0 right-0 rounded-none' : 'rounded-2xl';
 
   return (
-    <div className={`fixed z-50 flex flex-col items-end gap-3 ${fullscreen ? 'inset-0' : 'bottom-6 right-6'}`}>
+    <div className={`fixed z-50 flex flex-col items-end gap-3 ${fullscreen ? 'inset-0' : 'bottom-[88px] right-4 md:bottom-6 md:right-6'}`}>
 
       {/* Chat window */}
       {open && (
