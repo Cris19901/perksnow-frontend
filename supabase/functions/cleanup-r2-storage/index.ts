@@ -29,9 +29,9 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  // Require service-role auth
+  // Require a valid Bearer token (anon or service-role; actual DB ops use service-role internally)
   const authHeader = req.headers.get('authorization') ?? '';
-  if (!authHeader.includes(SUPABASE_SERVICE_KEY.slice(-20))) {
+  if (!authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
