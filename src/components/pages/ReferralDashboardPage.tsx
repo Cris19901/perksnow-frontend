@@ -154,7 +154,7 @@ export function ReferralDashboardPage() {
   const shareToWhatsApp = () => {
     if (stats?.referral_code) {
       const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
-      const message = `Join LavLay using my referral code and start earning! ${link}`;
+      const message = `🚀 I've been earning real money on LavLay — Nigeria's earn-while-you-scroll platform!\n\n💰 You get ₦5,000 bonus points just for signing up\n📱 Earn daily by watching reels, liking posts & following people\n🏦 Withdraw straight to your Nigerian bank account\n\nSign up free with my link and we both earn:\n${link}`;
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     }
   };
@@ -162,7 +162,7 @@ export function ReferralDashboardPage() {
   const shareToTwitter = () => {
     if (stats?.referral_code) {
       const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
-      const message = `Join LavLay and start earning! Use my referral code: ${stats.referral_code}`;
+      const message = `Earning real naira just by scrolling social media 🇳🇬💰 LavLay pays you to like posts, watch reels & follow people. Get ₦5,000 bonus when you sign up with my link:`;
       window.open(
         `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}&url=${encodeURIComponent(link)}`,
         '_blank'

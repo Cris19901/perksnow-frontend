@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '../Header';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,8 +7,11 @@ import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { CurrencySwitcher } from '../CurrencySwitcher';
-import { User, Bell, Lock, Globe, CreditCard, Store, ShieldCheck, Loader2 } from 'lucide-react';
+import { MobileBottomNav } from '../MobileBottomNav';
+import {
+  User, Bell, Lock, ShieldCheck, Loader2,
+  Eye, EyeOff, LogOut, Trash2, Check,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -19,318 +23,416 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onNavigate, onCartClick, cartItemsCount }: SettingsPageProps) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  // Profile state
+  const [profile, setProfile] = useState({
+    full_name: '', username: '', bio: '', location: '', website: '',
+  });
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  // Password state
+  const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
+  const [showPw, setShowPw] = useState({ current: false, newPass: false, confirm: false });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  // 2FA
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [toggling2FA, setToggling2FA] = useState(false);
 
+  // Notification prefs
+  const [notifPrefs, setNotifPrefs] = useState({
+    new_messages: true,
+    likes_comments: true,
+    new_followers: true,
+    points_earned: true,
+    withdrawal_updates: true,
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
+
   useEffect(() => {
-    if (user) {
-      supabase
-        .from('users')
-        .select('two_factor_enabled')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data) setTwoFactorEnabled(!!data.two_factor_enabled);
-        });
-    }
+    if (user) loadProfile();
   }, [user]);
 
-  const toggle2FA = async (enabled: boolean) => {
-    if (!user) return;
+  const loadProfile = async () => {
     try {
-      setToggling2FA(true);
-      const { error } = await supabase
+      setProfileLoading(true);
+      const { data, error } = await supabase
         .from('users')
-        .update({ two_factor_enabled: enabled })
-        .eq('id', user.id);
+        .select('full_name, username, bio, location, website, two_factor_enabled, notification_prefs')
+        .eq('id', user!.id)
+        .single();
 
       if (error) throw error;
+      if (data) {
+        setProfile({
+          full_name: data.full_name || '',
+          username:  data.username  || '',
+          bio:       data.bio       || '',
+          location:  data.location  || '',
+          website:   data.website   || '',
+        });
+        setTwoFactorEnabled(!!data.two_factor_enabled);
+        if (data.notification_prefs) {
+          setNotifPrefs(prev => ({ ...prev, ...data.notification_prefs }));
+        }
+      }
+    } catch {
+      toast.error('Failed to load profile');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
-      setTwoFactorEnabled(enabled);
-      toast.success(enabled
-        ? 'Two-factor authentication enabled! You\'ll receive a code via email on each login.'
-        : 'Two-factor authentication disabled.');
+  const saveProfile = async () => {
+    if (!profile.full_name.trim()) { toast.error('Full name is required'); return; }
+    if (!profile.username.trim())  { toast.error('Username is required');  return; }
+
+    setProfileSaving(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          full_name: profile.full_name.trim(),
+          username:  profile.username.trim().replace(/^@/, ''),
+          bio:       profile.bio.trim() || null,
+          location:  profile.location.trim() || null,
+          website:   profile.website.trim() || null,
+        })
+        .eq('id', user!.id);
+      if (error) throw error;
+      toast.success('Profile updated');
     } catch (err: any) {
-      toast.error('Failed to update 2FA setting');
-      console.error('2FA toggle error:', err);
+      toast.error(err.message?.includes('unique') ? 'Username already taken' : 'Failed to save profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const changePassword = async () => {
+    if (!passwords.newPass) { toast.error('Enter a new password'); return; }
+    if (passwords.newPass.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    if (passwords.newPass !== passwords.confirm) { toast.error('Passwords do not match'); return; }
+
+    setPwSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwords.newPass });
+      if (error) throw error;
+      setPasswords({ current: '', newPass: '', confirm: '' });
+      toast.success('Password updated successfully');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update password');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const toggle2FA = async (enabled: boolean) => {
+    setToggling2FA(true);
+    try {
+      const { error } = await supabase.from('users').update({ two_factor_enabled: enabled }).eq('id', user!.id);
+      if (error) throw error;
+      setTwoFactorEnabled(enabled);
+      toast.success(enabled ? '2FA enabled — you\'ll get a code by email on each login' : '2FA disabled');
+    } catch {
+      toast.error('Failed to update 2FA');
     } finally {
       setToggling2FA(false);
     }
   };
 
+  const saveNotifPrefs = async (prefs: typeof notifPrefs) => {
+    setNotifSaving(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ notification_prefs: prefs })
+        .eq('id', user!.id);
+      if (error) throw error;
+      toast.success('Notification preferences saved');
+    } catch {
+      toast.error('Failed to save preferences');
+    } finally {
+      setNotifSaving(false);
+    }
+  };
+
+  const toggleNotif = (key: keyof typeof notifPrefs) => {
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    saveNotifPrefs(updated);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch {
+      toast.error('Failed to sign out');
+    }
+  };
+
+  const PwField = ({
+    id, label, field,
+  }: { id: string; label: string; field: 'current' | 'newPass' | 'confirm' }) => (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative mt-1">
+        <Input
+          id={id}
+          type={showPw[field] ? 'text' : 'password'}
+          value={passwords[field]}
+          onChange={e => setPasswords(p => ({ ...p, [field]: e.target.value }))}
+          className="pr-10"
+          placeholder="••••••••"
+        />
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          onClick={() => setShowPw(p => ({ ...p, [field]: !p[field] }))}
+        >
+          {showPw[field] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+
+  const NotifRow = ({
+    label, sub, field,
+  }: { label: string; sub: string; field: keyof typeof notifPrefs }) => (
+    <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+      <div>
+        <p className="font-medium text-sm">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
+      </div>
+      <Switch
+        checked={notifPrefs[field]}
+        onCheckedChange={() => toggleNotif(field)}
+        disabled={notifSaving}
+      />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header
-        onNavigate={onNavigate}
-        onCartClick={onCartClick}
-        cartItemsCount={cartItemsCount}
-      />
+      <Header onNavigate={onNavigate} onCartClick={onCartClick} cartItemsCount={cartItemsCount} />
 
-      <div className="max-w-[1000px] mx-auto px-4 py-4 sm:py-6">
-        <h1 className="text-2xl sm:text-3xl mb-6">Settings</h1>
+      <div className="max-w-2xl mx-auto px-4 py-6 pb-28 md:pb-8">
+        <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
-        <Tabs defaultValue="account" className="space-y-6">
-          <TabsList className="bg-white border border-gray-200">
-            <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="privacy">Privacy</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
+        <Tabs defaultValue="account" className="space-y-4">
+          <TabsList className="w-full bg-white border border-gray-200 h-10">
+            <TabsTrigger value="account"  className="flex-1 text-xs sm:text-sm">Account</TabsTrigger>
+            <TabsTrigger value="security" className="flex-1 text-xs sm:text-sm">Security</TabsTrigger>
+            <TabsTrigger value="notifications" className="flex-1 text-xs sm:text-sm">Alerts</TabsTrigger>
           </TabsList>
 
-          {/* Account Settings */}
-          <TabsContent value="account" className="space-y-6">
+          {/* ── ACCOUNT ── */}
+          <TabsContent value="account" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
-                  Profile Information
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <User className="w-4 h-4" /> Profile Information
                 </CardTitle>
-                <CardDescription>Update your personal information</CardDescription>
+                <CardDescription>How others see you on LavLay</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input id="name" defaultValue="John Smith" />
+                {profileLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
                   </div>
-                  <div>
-                    <Label htmlFor="username">Username</Label>
-                    <Input id="username" defaultValue="@johnsmith" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="john@example.com" />
-                </div>
-                <div>
-                  <Label htmlFor="bio">Bio</Label>
-                  <Input id="bio" defaultValue="Digital creator & entrepreneur 🚀" />
-                </div>
-                <Button className="bg-gradient-to-r from-purple-600 to-pink-600">
-                  Save Changes
+                ) : (
+                  <>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="full_name">Full Name *</Label>
+                        <Input
+                          id="full_name"
+                          value={profile.full_name}
+                          onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))}
+                          placeholder="Your full name"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="username">Username *</Label>
+                        <div className="relative mt-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">@</span>
+                          <Input
+                            id="username"
+                            value={profile.username}
+                            onChange={e => setProfile(p => ({ ...p, username: e.target.value.replace(/^@/, '').replace(/\s/g, '') }))}
+                            placeholder="username"
+                            className="pl-7"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={user?.email || ''}
+                        disabled
+                        className="mt-1 bg-gray-50 text-gray-500 cursor-not-allowed"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Contact support to change your email</p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="bio">Bio</Label>
+                      <textarea
+                        id="bio"
+                        value={profile.bio}
+                        onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))}
+                        placeholder="Tell people a little about yourself"
+                        maxLength={160}
+                        rows={3}
+                        className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <p className="text-xs text-gray-400 text-right">{profile.bio.length}/160</p>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="location">Location</Label>
+                        <Input
+                          id="location"
+                          value={profile.location}
+                          onChange={e => setProfile(p => ({ ...p, location: e.target.value }))}
+                          placeholder="Lagos, Nigeria"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="website">Website</Label>
+                        <Input
+                          id="website"
+                          value={profile.website}
+                          onChange={e => setProfile(p => ({ ...p, website: e.target.value }))}
+                          placeholder="https://yoursite.com"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={saveProfile}
+                      disabled={profileSaving}
+                      className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-pink-600"
+                    >
+                      {profileSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : <><Check className="w-4 h-4 mr-2" />Save Changes</>}
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sign out & danger zone */}
+            <Card className="border-red-100">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-red-600">Account Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-4 h-4" /> Sign Out
+                </Button>
+                <p className="text-xs text-gray-400">
+                  To permanently delete your account, contact support@lavlay.com
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── SECURITY ── */}
+          <TabsContent value="security" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Lock className="w-4 h-4" /> Change Password
+                </CardTitle>
+                <CardDescription>Use at least 8 characters with a mix of letters and numbers</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <PwField id="newPass"  label="New Password"     field="newPass"  />
+                <PwField id="confirm"  label="Confirm Password" field="confirm"  />
+
+                {passwords.newPass && passwords.confirm && passwords.newPass !== passwords.confirm && (
+                  <p className="text-xs text-red-500">Passwords do not match</p>
+                )}
+                {passwords.newPass && passwords.newPass.length > 0 && passwords.newPass.length < 8 && (
+                  <p className="text-xs text-amber-500">Password too short (min 8 characters)</p>
+                )}
+
+                <Button
+                  onClick={changePassword}
+                  disabled={pwSaving || !passwords.newPass || !passwords.confirm}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  {pwSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</> : 'Update Password'}
                 </Button>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lock className="w-5 h-5" />
-                  Password & Security
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="w-4 h-4 text-purple-600" /> Two-Factor Authentication
                 </CardTitle>
+                <CardDescription>Add an extra layer of security to your account</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="current">Current Password</Label>
-                  <Input id="current" type="password" />
-                </div>
-                <div>
-                  <Label htmlFor="new">New Password</Label>
-                  <Input id="new" type="password" />
-                </div>
-                <div>
-                  <Label htmlFor="confirm">Confirm New Password</Label>
-                  <Input id="confirm" type="password" />
-                </div>
-                <Button variant="outline">Update Password</Button>
-
-                <div className="border-t pt-4 mt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck className="w-5 h-5 text-purple-600" />
-                      <div>
-                        <p className="font-medium">Two-Factor Authentication</p>
-                        <p className="text-sm text-gray-500">
-                          Receive a verification code via email when signing in
-                        </p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={twoFactorEnabled}
-                      onCheckedChange={toggle2FA}
-                      disabled={toggling2FA}
-                    />
-                  </div>
-                  {twoFactorEnabled && (
-                    <p className="text-xs text-green-600 mt-2 ml-8">
-                      2FA is active. A code will be sent to your email on each login.
+              <CardContent>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="font-medium text-sm">Email verification code</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {twoFactorEnabled
+                        ? '✅ Active — a code is sent to your email each login'
+                        : 'Receive a one-time code by email when you sign in'
+                      }
                     </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Store className="w-5 h-5" />
-                  Seller Information
-                </CardTitle>
-                <CardDescription>Manage your seller account</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="shopName">Shop Name</Label>
-                  <Input id="shopName" defaultValue="John's Shop" />
-                </div>
-                <div>
-                  <Label htmlFor="shopUrl">Shop URL</Label>
-                  <Input id="shopUrl" defaultValue="johnsmith.shop" />
-                </div>
-                <Button variant="outline">Update Shop</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Notifications Settings */}
-          <TabsContent value="notifications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  Notification Preferences
-                </CardTitle>
-                <CardDescription>Manage how you receive notifications</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>New Messages</p>
-                    <p className="text-sm text-gray-500">Get notified when someone messages you</p>
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>New Orders</p>
-                    <p className="text-sm text-gray-500">Get notified when you receive an order</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Likes & Comments</p>
-                    <p className="text-sm text-gray-500">Get notified when someone interacts with your posts</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>New Followers</p>
-                    <p className="text-sm text-gray-500">Get notified when someone follows you</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Marketing Emails</p>
-                    <p className="text-sm text-gray-500">Receive promotional emails and offers</p>
-                  </div>
-                  <Switch />
+                  <Switch
+                    checked={twoFactorEnabled}
+                    onCheckedChange={toggle2FA}
+                    disabled={toggling2FA}
+                  />
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Privacy Settings */}
-          <TabsContent value="privacy" className="space-y-6">
+          {/* ── NOTIFICATIONS ── */}
+          <TabsContent value="notifications" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lock className="w-5 h-5" />
-                  Privacy Controls
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Bell className="w-4 h-4" /> Notification Preferences
                 </CardTitle>
-                <CardDescription>Control who can see your content and information</CardDescription>
+                <CardDescription>Choose what you want to be notified about</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Private Account</p>
-                    <p className="text-sm text-gray-500">Only approved followers can see your posts</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Show Online Status</p>
-                    <p className="text-sm text-gray-500">Let others see when you're active</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Allow Messages from Anyone</p>
-                    <p className="text-sm text-gray-500">Anyone can send you messages</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Show Purchase History</p>
-                    <p className="text-sm text-gray-500">Display your purchase history on your profile</p>
-                  </div>
-                  <Switch />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Preferences */}
-          <TabsContent value="preferences" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="w-5 h-5" />
-                  Regional Preferences
-                </CardTitle>
-                <CardDescription>Customize your regional settings</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Currency</Label>
-                  <div className="mt-2">
-                    <CurrencySwitcher />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    All prices will be displayed in your selected currency
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="language">Language</Label>
-                  <Input id="language" defaultValue="English (US)" />
-                </div>
-                <div>
-                  <Label htmlFor="timezone">Timezone</Label>
-                  <Input id="timezone" defaultValue="Pacific Time (PT)" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Display Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Dark Mode</p>
-                    <p className="text-sm text-gray-500">Use dark theme across the app</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p>Compact View</p>
-                    <p className="text-sm text-gray-500">Show more content on screen</p>
-                  </div>
-                  <Switch />
-                </div>
+              <CardContent>
+                <NotifRow field="new_messages"       label="New Messages"        sub="Get notified when someone sends you a message" />
+                <NotifRow field="likes_comments"     label="Likes & Comments"    sub="When someone likes or comments on your posts" />
+                <NotifRow field="new_followers"      label="New Followers"       sub="When someone starts following you" />
+                <NotifRow field="points_earned"      label="Points Credited"     sub="When points are added to your account" />
+                <NotifRow field="withdrawal_updates" label="Withdrawal Updates"  sub="Status changes on your withdrawal requests" />
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      <MobileBottomNav currentPage="settings" onNavigate={onNavigate} />
     </div>
   );
 }
