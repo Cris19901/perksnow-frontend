@@ -1,205 +1,150 @@
-import { Home, PlaySquare, User, TrendingUp, PlusCircle, LogOut } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, PlaySquare, User, TrendingUp, PlusCircle, Bell } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
 
-export function MobileBottomNav() {
-  const { user, signOut } = useAuth();
+interface MobileBottomNavProps {
+  onNavigate?: (page: string) => void;
+  currentPage?: string;
+}
+
+export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProps) {
+  const { user } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-  const currentPage = location.pathname.slice(1) || 'feed';
+  const activePage = currentPage || location.pathname.slice(1) || 'feed';
+
   const [pointsBalance, setPointsBalance] = useState(0);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
-    console.log('🔍 MobileBottomNav: User state:', user ? `Logged in as ${user.id}` : 'Not logged in');
-    if (user) {
-      fetchUserPoints();
-    }
+    if (!user) return;
+    fetchPoints();
+    fetchUnreadCounts();
+
+    // Realtime: watch new notifications
+    const notifChannel = supabase
+      .channel('nav_notifications')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, () => fetchUnreadCounts())
+      .subscribe();
+
+    // Realtime: watch conversation updates (unread messages)
+    const msgChannel = supabase
+      .channel('nav_conversations')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+      }, () => fetchUnreadCounts())
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'direct_messages',
+      }, () => fetchUnreadCounts())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+      supabase.removeChannel(msgChannel);
+    };
   }, [user]);
 
-  const fetchUserPoints = async (retryCount = 0) => {
-    if (!user?.id) {
-      console.log('❌ MobileBottomNav: No user ID, skipping points fetch');
-      return;
-    }
-
+  const fetchPoints = async () => {
+    if (!user?.id) return;
     try {
-      console.log('🔍 MobileBottomNav: Fetching points for user:', user.id);
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('points_balance')
         .eq('id', user.id)
         .single();
-
-      if (error) {
-        // Retry on network errors
-        if (error.message?.includes('Failed to fetch') && retryCount < 2) {
-          console.log(`🔄 MobileBottomNav: Retrying points fetch (attempt ${retryCount + 1}/2)`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return fetchUserPoints(retryCount + 1);
-        }
-
-        console.error('❌ MobileBottomNav: Error fetching points:', error);
-        // Don't throw, just set to 0
-        setPointsBalance(0);
-        return;
-      }
-      console.log('✅ MobileBottomNav: Points fetched:', data?.points_balance || 0);
       setPointsBalance(data?.points_balance || 0);
-    } catch (err) {
-      // Retry on network exceptions
-      if (retryCount < 2) {
-        console.log(`🔄 MobileBottomNav: Retrying points fetch after exception (attempt ${retryCount + 1}/2)`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return fetchUserPoints(retryCount + 1);
-      }
-
-      console.error('❌ MobileBottomNav: Exception fetching user points:', err);
-      // Set default points on error so component still works
-      setPointsBalance(0);
-    }
+    } catch {}
   };
 
-  // Format numbers: 1000 -> 1k, 10000 -> 10k, etc.
-  const formatPoints = (points: number): string => {
-    if (points >= 1000000) {
-      return `${(points / 1000000).toFixed(1)}M`;
-    }
-    if (points >= 1000) {
-      return `${(points / 1000).toFixed(1)}k`;
-    }
-    return points.toString();
-  };
-
-  const handleLogout = async () => {
+  const fetchUnreadCounts = async () => {
+    if (!user?.id) return;
     try {
-      await signOut();
-      toast.success('Logged out successfully');
-      navigate('/login');
-    } catch (error) {
-      toast.error('Failed to log out');
-    }
+      // Unread notifications
+      const { count: notifCount } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotifs(notifCount ?? 0);
+
+      // Unread messages (sum of my_unread across all conversations)
+      const { data: convs } = await supabase
+        .from('my_conversations')
+        .select('my_unread');
+      const totalUnread = (convs ?? []).reduce((sum: number, c: any) => sum + (c.my_unread || 0), 0);
+      setUnreadMessages(totalUnread);
+    } catch {}
   };
 
-  const handleCreateClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    toast.info('Marketplace coming soon! 🚀');
+  const formatPoints = (pts: number) => {
+    if (pts >= 1_000_000) return `${(pts / 1_000_000).toFixed(1)}M`;
+    if (pts >= 1_000)     return `${(pts / 1_000).toFixed(1)}k`;
+    return pts.toString();
   };
+
+  if (!user) return null;
 
   const navItems = [
-    {
-      id: 'feed',
-      path: '/feed',
-      icon: Home,
-      label: 'Home',
-    },
-    {
-      id: 'reels',
-      path: '/reels',
-      icon: PlaySquare,
-      label: 'Reels',
-    },
-    {
-      id: 'create',
-      path: '/create-product',
-      icon: PlusCircle,
-      label: 'Create',
-      isCreate: true,
-    },
-    {
-      id: 'points',
-      path: '/points',
-      icon: TrendingUp,
-      label: formatPoints(pointsBalance),
-      isPoints: true,
-    },
-    {
-      id: 'profile',
-      path: '/profile',
-      icon: User,
-      label: 'Profile',
-    },
-    {
-      id: 'logout',
-      path: '#',
-      icon: LogOut,
-      label: 'Logout',
-      isLogout: true,
-    },
+    { id: 'feed',          path: '/feed',          icon: Home,       label: 'Home'              },
+    { id: 'reels',         path: '/reels',         icon: PlaySquare, label: 'Reels'             },
+    { id: 'notifications', path: '/notifications', icon: Bell,       label: 'Alerts', badge: unreadNotifs },
+    { id: 'points',        path: '/points',        icon: TrendingUp, label: formatPoints(pointsBalance), isPoints: true },
+    { id: 'profile',       path: '/profile',       icon: User,       label: 'Profile'           },
   ];
 
-  // Temporarily show nav even if not logged in for debugging
-  // if (!user) return null;
-  console.log('🎨 MobileBottomNav: Rendering bottom nav');
-
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-      <div className="flex items-center justify-around h-16 px-2">
-        {navItems.map((item) => {
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50"
+         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="flex items-center justify-around h-16 px-1">
+        {navItems.map(item => {
           const Icon = item.icon;
-          const isActive = currentPage === item.id;
-
-          // Handle logout button
-          if (item.isLogout) {
-            return (
-              <button
-                key={item.id}
-                onClick={handleLogout}
-                className="flex flex-col items-center justify-center flex-1 h-full transition-colors text-red-600"
-              >
-                <Icon className="w-6 h-6" />
-                <span className="text-xs mt-1">{item.label}</span>
-              </button>
-            );
-          }
-
-          // Handle create button (coming soon)
-          if (item.isCreate) {
-            return (
-              <button
-                key={item.id}
-                onClick={handleCreateClick}
-                className="flex flex-col items-center justify-center flex-1 h-full"
-              >
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 shadow-lg">
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xs mt-1 text-gray-600">{item.label}</span>
-              </button>
-            );
-          }
+          const isActive = activePage === item.id || location.pathname === item.path;
 
           return (
             <Link
               key={item.id}
               to={item.path}
-              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-                isActive ? 'text-purple-600' : 'text-gray-600'
+              className={`relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors ${
+                isActive ? 'text-purple-600' : 'text-gray-500'
               }`}
             >
-              {item.isPoints ? (
-                <div className="flex flex-col items-center">
-                  {isActive ? (
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                  ) : (
-                    <Icon className="w-6 h-6" />
-                  )}
-                  <span className={`text-xs font-bold mt-1 ${
-                    isActive ? 'text-purple-600' : 'text-gray-700'
-                  }`}>
-                    {item.label}
+              <div className="relative">
+                {item.isPoints && isActive ? (
+                  <div className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
+                    <Icon className="w-3.5 h-3.5 text-white" />
+                  </div>
+                ) : (
+                  <Icon className={`w-6 h-6 ${isActive && !item.isPoints ? 'fill-purple-100' : ''}`} />
+                )}
+
+                {/* Badge */}
+                {!!item.badge && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                    {item.badge > 99 ? '99+' : item.badge}
                   </span>
-                </div>
-              ) : (
-                <>
-                  <Icon className={`w-6 h-6 ${isActive ? 'fill-purple-600' : ''}`} />
-                  <span className="text-xs mt-1">{item.label}</span>
-                </>
+                )}
+              </div>
+
+              <span className={`text-[10px] font-medium leading-none ${
+                item.isPoints ? (isActive ? 'text-purple-600 font-bold' : 'text-gray-700 font-semibold') : ''
+              }`}>
+                {item.label}
+              </span>
+
+              {/* Active dot */}
+              {isActive && (
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-purple-600" />
               )}
             </Link>
           );

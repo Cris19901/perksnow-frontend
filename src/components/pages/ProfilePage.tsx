@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../Header';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -27,6 +27,7 @@ interface ProfilePageProps {
 export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCount }: ProfilePageProps) {
   const { user } = useAuth();
   const { username } = useParams<{ username?: string }>();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -381,6 +382,19 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
     }
   };
 
+  const handleMessage = async () => {
+    if (!user || !profile) return;
+    try {
+      const { data, error } = await supabase.rpc('get_or_create_conversation', {
+        p_other_user_id: profile.id,
+      });
+      if (error) throw error;
+      navigate('/messages');
+    } catch (err: any) {
+      toast.error('Could not open conversation');
+    }
+  };
+
   // Show error state
   if (error) {
     return (
@@ -581,7 +595,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                       </>
                     ) : (
                       <>
-                        <Button variant="outline">Message</Button>
+                        <Button variant="outline" onClick={handleMessage}>Message</Button>
                         <Button
                           onClick={isFollowing ? handleUnfollow : handleFollow}
                           disabled={followLoading}
