@@ -55,31 +55,27 @@
       outDir: 'build',
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            // React core — smallest chunk, cached longest
-            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/react-router-dom/') || id.includes('node_modules/react-router/')) {
-              return 'vendor-react';
-            }
-            // Supabase — medium chunk
-            if (id.includes('node_modules/@supabase/')) {
-              return 'vendor-supabase';
-            }
-            // Lucide icons — large, tree-shaken but still worth isolating for cache
-            if (id.includes('node_modules/lucide-react/')) {
-              return 'vendor-lucide';
-            }
-            // Radix UI primitives
-            if (id.includes('node_modules/@radix-ui/')) {
-              return 'vendor-radix';
-            }
-            // Recharts — only used in admin, loaded lazily
-            if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-')) {
-              return 'vendor-charts';
-            }
-            // Remaining node_modules → vendor-misc
-            if (id.includes('node_modules/')) {
-              return 'vendor-misc';
-            }
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+            'vendor-lucide': ['lucide-react'],
+            'vendor-recharts': ['recharts'],
+            'vendor-radix': [
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-dropdown-menu',
+              '@radix-ui/react-select',
+              '@radix-ui/react-tabs',
+              '@radix-ui/react-avatar',
+              '@radix-ui/react-tooltip',
+              '@radix-ui/react-popover',
+              '@radix-ui/react-scroll-area',
+              '@radix-ui/react-alert-dialog',
+              '@radix-ui/react-checkbox',
+              '@radix-ui/react-switch',
+              '@radix-ui/react-slider',
+              '@radix-ui/react-progress',
+              '@radix-ui/react-radio-group',
+            ],
           },
         },
       },
