@@ -1,4 +1,4 @@
-import { Home, PlaySquare, User, TrendingUp, Bell } from 'lucide-react';
+import { Home, PlaySquare, User, TrendingUp, Bell, PlusCircle } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
@@ -70,11 +70,12 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
   if (!user) return null;
 
   const navItems = [
-    { id: 'feed',          path: '/feed',          icon: Home,       label: 'Home'                                              },
-    { id: 'reels',         path: '/reels',         icon: PlaySquare, label: 'Reels'                                             },
-    { id: 'notifications', path: '/notifications', icon: Bell,       label: 'Alerts', badge: unreadNotifs                       },
-    { id: 'points',        path: '/points',        icon: TrendingUp, label: formatPoints(pointsBalance), isPoints: true         },
-    { id: 'profile',       path: '/profile',       icon: User,       label: 'Profile'                                           },
+    { id: 'feed',          path: '/feed',           icon: Home,       label: 'Home'                                              },
+    { id: 'reels',         path: '/reels',          icon: PlaySquare, label: 'Reels'                                             },
+    { id: 'create',        path: '/create-product', icon: PlusCircle, label: 'Create'                                            },
+    { id: 'notifications', path: '/notifications',  icon: Bell,       label: 'Alerts', badge: unreadNotifs                       },
+    { id: 'points',        path: '/points',         icon: TrendingUp, label: formatPoints(pointsBalance), isPoints: true         },
+    { id: 'profile',       path: '/profile',        icon: User,       label: 'Profile'                                           },
   ];
 
   return (
