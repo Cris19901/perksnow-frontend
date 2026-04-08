@@ -1,4 +1,4 @@
-import { Home, PlaySquare, User, TrendingUp, PlusCircle, Bell } from 'lucide-react';
+import { Home, PlaySquare, User, MessageCircle, Bell } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
@@ -14,13 +14,11 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
   const location = useLocation();
   const activePage = currentPage || location.pathname.slice(1) || 'feed';
 
-  const [pointsBalance, setPointsBalance] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     if (!user) return;
-    fetchPoints();
     fetchUnreadCounts();
 
     // Realtime: watch new notifications
@@ -55,18 +53,6 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
     };
   }, [user]);
 
-  const fetchPoints = async () => {
-    if (!user?.id) return;
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('points_balance')
-        .eq('id', user.id)
-        .single();
-      setPointsBalance(data?.points_balance || 0);
-    } catch {}
-  };
-
   const fetchUnreadCounts = async () => {
     if (!user?.id) return;
     try {
@@ -87,20 +73,14 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
     } catch {}
   };
 
-  const formatPoints = (pts: number) => {
-    if (pts >= 1_000_000) return `${(pts / 1_000_000).toFixed(1)}M`;
-    if (pts >= 1_000)     return `${(pts / 1_000).toFixed(1)}k`;
-    return pts.toString();
-  };
-
   if (!user) return null;
 
   const navItems = [
-    { id: 'feed',          path: '/feed',          icon: Home,       label: 'Home'              },
-    { id: 'reels',         path: '/reels',         icon: PlaySquare, label: 'Reels'             },
-    { id: 'notifications', path: '/notifications', icon: Bell,       label: 'Alerts', badge: unreadNotifs },
-    { id: 'points',        path: '/points',        icon: TrendingUp, label: formatPoints(pointsBalance), isPoints: true },
-    { id: 'profile',       path: '/profile',       icon: User,       label: 'Profile'           },
+    { id: 'feed',          path: '/feed',          icon: Home,          label: 'Home'                                    },
+    { id: 'reels',         path: '/reels',         icon: PlaySquare,    label: 'Reels'                                   },
+    { id: 'messages',      path: '/messages',      icon: MessageCircle, label: 'Chats',   badge: unreadMessages          },
+    { id: 'notifications', path: '/notifications', icon: Bell,          label: 'Alerts',  badge: unreadNotifs            },
+    { id: 'profile',       path: '/profile',       icon: User,          label: 'Profile'                                 },
   ];
 
   return (
@@ -120,13 +100,7 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
               }`}
             >
               <div className="relative">
-                {item.isPoints && isActive ? (
-                  <div className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
-                    <Icon className="w-3.5 h-3.5 text-white" />
-                  </div>
-                ) : (
-                  <Icon className={`w-6 h-6 ${isActive && !item.isPoints ? 'fill-purple-100' : ''}`} />
-                )}
+                <Icon className={`w-6 h-6 ${isActive ? 'fill-purple-100' : ''}`} />
 
                 {/* Badge */}
                 {!!item.badge && item.badge > 0 && (
@@ -136,9 +110,7 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
                 )}
               </div>
 
-              <span className={`text-[10px] font-medium leading-none ${
-                item.isPoints ? (isActive ? 'text-purple-600 font-bold' : 'text-gray-700 font-semibold') : ''
-              }`}>
+              <span className="text-[10px] font-medium leading-none">
                 {item.label}
               </span>
 

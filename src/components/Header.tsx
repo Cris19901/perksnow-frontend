@@ -45,6 +45,38 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // Real notification & message counts
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchCounts = async () => {
+      try {
+        const { count: nCount } = await supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        setUnreadNotifs(nCount ?? 0);
+      } catch {}
+      try {
+        const { data: convs } = await supabase.from('my_conversations').select('my_unread');
+        const total = (convs ?? []).reduce((sum: number, c: any) => sum + (c.my_unread || 0), 0);
+        setUnreadMessages(total);
+      } catch {}
+    };
+    fetchCounts();
+
+    const ch = supabase
+      .channel('header_badges')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => fetchCounts())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, () => fetchCounts())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, () => fetchCounts())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user]);
+
   // Close search results when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -178,18 +210,22 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'messages' ? 'bg-gray-100' : ''}`}
             >
               <MessageCircle className="w-6 h-6" />
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
-                3
-              </Badge>
+              {unreadMessages > 0 && (
+                <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </Badge>
+              )}
             </Link>
             <Link
               to="/notifications"
               className={`relative p-2 hover:bg-gray-100 rounded-full transition-colors ${currentPage === 'notifications' ? 'bg-gray-100' : ''}`}
             >
               <Bell className="w-6 h-6" />
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
-                5
-              </Badge>
+              {unreadNotifs > 0 && (
+                <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
+                  {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                </Badge>
+              )}
             </Link>
             <Link
               to="/create-product"
@@ -297,7 +333,9 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
                   >
                     <MessageCircle className="w-5 h-5" />
                     Messages
-                    <Badge className="ml-auto bg-red-500">3</Badge>
+                    {unreadMessages > 0 && (
+                      <Badge className="ml-auto bg-red-500">{unreadMessages > 99 ? '99+' : unreadMessages}</Badge>
+                    )}
                   </Button>
                   <Button
                     variant={currentPage === 'notifications' ? 'default' : 'ghost'}
@@ -306,7 +344,9 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
                   >
                     <Bell className="w-5 h-5" />
                     Notifications
-                    <Badge className="ml-auto bg-red-500">5</Badge>
+                    {unreadNotifs > 0 && (
+                      <Badge className="ml-auto bg-red-500">{unreadNotifs > 99 ? '99+' : unreadNotifs}</Badge>
+                    )}
                   </Button>
                   <div className="border-t pt-4 mt-4">
                     <div
