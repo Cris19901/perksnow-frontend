@@ -277,20 +277,43 @@ export function Header({ onCartClick, cartItemsCount = 0 }: HeaderProps) {
           </nav>
 
           {/* Mobile Navigation */}
-          <div className="flex md:hidden items-center gap-2">
-            {/* Mobile Search Button */}
+          <div className="flex md:hidden items-center gap-1">
             <button
               onClick={() => setShowMobileSearch(true)}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               aria-label="Search users"
             >
-              <Search className="w-6 h-6" />
+              <Search className="w-5 h-5" />
             </button>
+            <Link
+              to="/messages"
+              className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Messages"
+            >
+              <MessageCircle className="w-5 h-5" />
+              {unreadMessages > 0 && (
+                <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </Badge>
+              )}
+            </Link>
+            <Link
+              to="/notifications"
+              className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadNotifs > 0 && (
+                <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
+                  {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                </Badge>
+              )}
+            </Link>
             <button
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
               onClick={onCartClick}
             >
-              <ShoppingCart className="w-6 h-6" />
+              <ShoppingCart className="w-5 h-5" />
               {cartItemsCount > 0 && (
                 <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-purple-600 text-xs">
                   {cartItemsCount}
