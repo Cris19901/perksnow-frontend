@@ -88,10 +88,10 @@ export function MobileBottomNav({ onNavigate, currentPage }: MobileBottomNavProp
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/40" />
 
-          {/* Menu card - positioned above the nav bar */}
+          {/* Menu card - anchored above the bottom nav */}
           <div
-            className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 w-56"
-            style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            className="fixed left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 w-56"
+            style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px) + 12px)' }}
             onClick={e => e.stopPropagation()}
           >
             <button

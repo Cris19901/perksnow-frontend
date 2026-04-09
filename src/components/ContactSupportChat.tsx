@@ -288,7 +288,13 @@ export function ContactSupportChat() {
   const chatPos    = fullscreen ? 'bottom-0 right-0 rounded-none' : 'rounded-2xl';
 
   return (
-    <div className={`fixed z-[9999] flex flex-col items-end gap-3 ${fullscreen ? 'inset-0' : 'bottom-[88px] right-4 md:bottom-6 md:right-6'}`}>
+    <div
+      className={`fixed z-[9999] flex flex-col items-end gap-3 ${fullscreen ? 'inset-0' : ''}`}
+      style={fullscreen ? undefined : {
+        bottom: 'calc(64px + env(safe-area-inset-bottom, 0px) + 16px)',
+        right: '16px',
+      }}
+    >
 
       {/* Chat window */}
       {open && (
