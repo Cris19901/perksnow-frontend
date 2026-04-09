@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Header } from '../Header';
 import { Stories } from '../Stories';
 import { CreatePost } from '../CreatePost';
@@ -43,6 +43,8 @@ interface FeedPageProps {
 export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount }: FeedPageProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const createPostRef = useRef<HTMLDivElement>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [reels, setReels] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
@@ -276,6 +278,18 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
     }
   }, [user]);
 
+  // Auto-focus CreatePost when navigated from the Create button
+  useEffect(() => {
+    if ((location.state as any)?.focusCreate) {
+      setTimeout(() => {
+        createPostRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Focus the textarea inside CreatePost
+        const textarea = createPostRef.current?.querySelector('textarea');
+        if (textarea) textarea.focus();
+      }, 300);
+    }
+  }, [location.state]);
+
   // Scroll-based infinite loading - fires when user scrolls near bottom
   useEffect(() => {
     const handleScroll = () => {
@@ -393,7 +407,9 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
             </div>
 
             <Stories />
-            <CreatePost onPostCreated={fetchFeedData} />
+            <div ref={createPostRef}>
+              <CreatePost onPostCreated={fetchFeedData} />
+            </div>
 
             {/* Mobile Referral & Upgrade Cards (hidden on desktop) */}
             <div className="lg:hidden space-y-4">

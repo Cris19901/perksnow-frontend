@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header } from '../Header';
 import { MobileBottomNav } from '../MobileBottomNav';
 import { ReelUpload } from '../ReelUpload';
@@ -40,11 +41,12 @@ const REELS_PER_PAGE = 20;
 
 export function ReelsPage({ onNavigate, onCartClick, cartItemsCount }: ReelsPageProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
+  const [showUpload, setShowUpload] = useState(() => !!(location.state as any)?.openUpload);
   const [showViewer, setShowViewer] = useState(false);
   const [selectedReelId, setSelectedReelId] = useState<string | null>(null);
   const [youtubeModalId, setYoutubeModalId] = useState<string | null>(null);
