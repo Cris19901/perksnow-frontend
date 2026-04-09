@@ -423,7 +423,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">Earn with Referrals</h3>
                       <p className="text-sm text-gray-600 mb-3">
-                        Invite friends and earn 20 points + 5% of their deposits
+                        Invite friends and earn 400 points + 10% of their deposits
                       </p>
                       <Button
                         size="sm"

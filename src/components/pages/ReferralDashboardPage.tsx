@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
   TrendingUp,
   Wallet,
   CheckCircle2,
+  ArrowLeft,
   Clock,
   DollarSign,
   Gift
@@ -40,6 +42,7 @@ interface Referral {
 
 export function ReferralDashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,9 +228,16 @@ export function ReferralDashboardPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
           <h1 className="text-3xl font-bold text-gray-900">Referral Dashboard</h1>
           <p className="text-gray-600 mt-2">
-            Invite friends and earn rewards for every signup and deposit
+            Invite friends and earn 400 points + 10% of their deposits
           </p>
         </div>
 
