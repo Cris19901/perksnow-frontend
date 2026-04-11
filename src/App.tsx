@@ -41,11 +41,11 @@ const AdminAuditLogPage = lazy(() => import('./components/pages/AdminAuditLogPag
 const AdminSupportPage = lazy(() => import('./components/pages/AdminSupportPage').then(m => ({ default: m.AdminSupportPage })));
 const AdminKnowledgeBasePage = lazy(() => import('./components/pages/AdminKnowledgeBasePage').then(m => ({ default: m.AdminKnowledgeBasePage })));
 const AdminSubscriptionAnalytics = lazy(() => import('./components/pages/AdminSubscriptionAnalytics').then(m => ({ default: m.AdminSubscriptionAnalytics })));
-import { OnboardingFlow } from './components/OnboardingFlow';
-import { CartSheet } from './components/CartSheet';
-import { ProductDetailModal } from './components/ProductDetailModal';
-import PhoneVerificationBanner from './components/PhoneVerificationBanner';
-import { ContactSupportChat } from './components/ContactSupportChat';
+// Eagerly-imported heavy components moved to lazy to keep the index chunk small
+const OnboardingFlow = lazy(() => import('./components/OnboardingFlow').then(m => ({ default: m.OnboardingFlow })));
+const CartSheet = lazy(() => import('./components/CartSheet').then(m => ({ default: m.CartSheet })));
+const ProductDetailModal = lazy(() => import('./components/ProductDetailModal').then(m => ({ default: m.ProductDetailModal })));
+const ContactSupportChat = lazy(() => import('./components/ContactSupportChat').then(m => ({ default: m.ContactSupportChat })));
 import { supabase } from './lib/supabase';
 import { toast, Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/react';
@@ -291,10 +291,12 @@ function AppContent() {
 
       {/* Onboarding Flow */}
       {showOnboarding && !checkingOnboarding && (
-        <OnboardingFlow
-          onComplete={() => setShowOnboarding(false)}
-          onSkip={() => setShowOnboarding(false)}
-        />
+        <Suspense fallback={null}>
+          <OnboardingFlow
+            onComplete={() => setShowOnboarding(false)}
+            onSkip={() => setShowOnboarding(false)}
+          />
+        </Suspense>
       )}
 
       <Suspense fallback={
@@ -640,19 +642,21 @@ function AppContent() {
       </Routes>
       </Suspense>
 
-      <CartSheet
-        open={isCartOpen}
-        onOpenChange={setIsCartOpen}
-        items={cartItems}
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemoveItem={handleRemoveItem}
-      />
-      <ProductDetailModal
-        product={selectedProduct}
-        open={isProductModalOpen}
-        onOpenChange={setIsProductModalOpen}
-        onAddToCart={handleAddToCart}
-      />
+      <Suspense fallback={null}>
+        <CartSheet
+          open={isCartOpen}
+          onOpenChange={setIsCartOpen}
+          items={cartItems}
+          onUpdateQuantity={handleUpdateQuantity}
+          onRemoveItem={handleRemoveItem}
+        />
+        <ProductDetailModal
+          product={selectedProduct}
+          open={isProductModalOpen}
+          onOpenChange={setIsProductModalOpen}
+          onAddToCart={handleAddToCart}
+        />
+      </Suspense>
     </>
   );
 }
@@ -663,7 +667,7 @@ export default function App() {
       <AuthProvider>
         <CurrencyProvider>
           <AppContent />
-          <ContactSupportChat />
+          <Suspense fallback={null}><ContactSupportChat /></Suspense>
         </CurrencyProvider>
       </AuthProvider>
       {/* Vercel Analytics - tracks page views and events */}
