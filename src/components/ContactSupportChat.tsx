@@ -283,7 +283,7 @@ export function ContactSupportChat() {
     seedGreeting();
   };
 
-  const chatWidth  = fullscreen ? 'w-full'      : 'w-[calc(100vw-2rem)] sm:w-[380px]';
+  const chatWidth  = fullscreen ? 'w-full'      : 'w-[380px] max-w-[calc(100vw-32px)]';
   const chatHeight = fullscreen ? 'h-[100dvh]'  : 'max-h-[70dvh] sm:max-h-[580px]';
   const chatPos    = fullscreen ? 'bottom-0 right-0 rounded-none' : 'rounded-2xl';
 
