@@ -12,13 +12,6 @@ interface LandingPageProps {
 
 const PLANS = [
   {
-    name: 'Daily',
-    price: '₦300',
-    period: '/day',
-    highlight: false,
-    perks: ['Earn up to ₦150/day', 'Post & reel upload', 'Withdraw earnings', '24h access'],
-  },
-  {
     name: 'Starter',
     price: '₦1,500',
     period: '/15 days',

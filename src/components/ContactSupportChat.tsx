@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MessageCircle, X, Send, Loader2, ChevronDown,
   Paperclip, Smile, Star, CheckCheck, Check,
@@ -287,7 +288,7 @@ export function ContactSupportChat() {
   const chatHeight = fullscreen ? 'h-[100dvh]'  : 'max-h-[70dvh] sm:max-h-[580px]';
   const chatPos    = fullscreen ? 'bottom-0 right-0 rounded-none' : 'rounded-2xl';
 
-  return (
+  return createPortal(
     <div
       className={`fixed z-[9999] flex flex-col items-end gap-3 ${fullscreen ? 'inset-0' : ''}`}
       style={fullscreen ? undefined : {
@@ -489,6 +490,7 @@ export function ContactSupportChat() {
           )}
         </button>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
