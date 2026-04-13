@@ -139,24 +139,48 @@ export function ReferralDashboardPage() {
     }
   };
 
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied!`);
+    } catch {
+      // Fallback for browsers that block clipboard API
+      try {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        toast.success(`${label} copied!`);
+      } catch {
+        toast.error('Could not copy — please select and copy manually');
+      }
+    }
+  };
+
   const copyReferralCode = () => {
     if (stats?.referral_code) {
-      navigator.clipboard.writeText(stats.referral_code);
-      toast.success('Referral code copied!');
+      copyToClipboard(stats.referral_code, 'Referral code');
     }
   };
 
   const copyReferralLink = () => {
     if (stats?.referral_code) {
-      const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
-      navigator.clipboard.writeText(link);
-      toast.success('Referral link copied!');
+      const link = `${window.location.origin}/signup?ref=${stats.referral_code}`;
+      copyToClipboard(link, 'Referral link');
     }
   };
 
+  const getReferralLink = () =>
+    `${window.location.origin}/signup?ref=${stats?.referral_code || ''}`;
+
   const shareToWhatsApp = () => {
     if (stats?.referral_code) {
-      const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
+      const link = getReferralLink();
       const message = `🚀 I've been earning real money on LavLay — Nigeria's earn-while-you-scroll platform!\n\n💰 You get ₦5,000 bonus points just for signing up\n📱 Earn daily by watching reels, liking posts & following people\n🏦 Withdraw straight to your Nigerian bank account\n\nSign up free with my link and we both earn:\n${link}`;
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     }
@@ -164,7 +188,7 @@ export function ReferralDashboardPage() {
 
   const shareToTwitter = () => {
     if (stats?.referral_code) {
-      const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
+      const link = getReferralLink();
       const message = `Earning real naira just by scrolling social media 🇳🇬💰 LavLay pays you to like posts, watch reels & follow people. Get ₦5,000 bonus when you sign up with my link:`;
       window.open(
         `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}&url=${encodeURIComponent(link)}`,
@@ -175,7 +199,7 @@ export function ReferralDashboardPage() {
 
   const shareToFacebook = () => {
     if (stats?.referral_code) {
-      const link = `https://lavlay.com/signup?ref=${stats.referral_code}`;
+      const link = getReferralLink();
       window.open(
         `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`,
         '_blank'
@@ -224,7 +248,7 @@ export function ReferralDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-8">
+    <div className="min-h-screen bg-gray-50 pb-20 md:pb-8 overflow-x-hidden">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -313,28 +337,28 @@ export function ReferralDashboardPage() {
           <CardContent>
             <div className="space-y-4">
               {/* Referral Code */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0">
                 <Input
                   value={stats?.referral_code || ''}
                   readOnly
-                  className="font-mono text-lg font-bold"
+                  className="font-mono text-lg font-bold min-w-0"
                 />
-                <Button onClick={copyReferralCode} variant="outline">
+                <Button onClick={copyReferralCode} variant="outline" className="flex-shrink-0">
                   <Copy className="h-4 w-4 mr-2" />
                   Copy
                 </Button>
               </div>
 
               {/* Referral Link */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0">
                 <Input
-                  value={`https://lavlay.com/signup?ref=${stats?.referral_code || ''}`}
+                  value={stats?.referral_code ? `${window.location.origin}/signup?ref=${stats.referral_code}` : ''}
                   readOnly
-                  className="text-sm"
+                  className="text-sm min-w-0"
                 />
-                <Button onClick={copyReferralLink} variant="outline">
+                <Button onClick={copyReferralLink} variant="outline" className="flex-shrink-0">
                   <Copy className="h-4 w-4 mr-2" />
-                  Copy Link
+                  Copy
                 </Button>
               </div>
 
@@ -411,7 +435,7 @@ export function ReferralDashboardPage() {
                 <p className="text-gray-600 mb-4">
                   Share your referral code to start earning
                 </p>
-                <Button onClick={copyReferralLink}>
+                <Button onClick={copyReferralLink} disabled={!stats?.referral_code}>
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Referral Link
                 </Button>
