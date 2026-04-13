@@ -387,7 +387,7 @@ export function FeedPage({ onNavigate, onCartClick, onAddToCart, cartItemsCount 
       <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-40 md:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 sm:gap-6">
           {/* Main Content */}
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-4 sm:space-y-6 min-w-0 overflow-hidden">
             {/* Earn Points Announcement Banner - Visible on all screens */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 shadow-sm">
               <div className="flex items-start gap-3">

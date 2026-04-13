@@ -23,6 +23,10 @@ import {
   Video,
   Ban,
   BookOpen,
+  ShoppingBag,
+  ToggleLeft,
+  ToggleRight,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -49,6 +53,14 @@ interface Stats {
   bannedUsers: number;
 }
 
+interface MarketplaceStats {
+  totalOrders: number;
+  pendingOrders: number;
+  paidOrders: number;
+  totalGMV: number;
+  pendingProducts: number;
+}
+
 export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: AdminDashboardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -65,9 +77,19 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
     totalReels: 0,
     bannedUsers: 0,
   });
+  const [marketplaceEnabled, setMarketplaceEnabled] = useState(false);
+  const [marketplaceToggling, setMarketplaceToggling] = useState(false);
+  const [marketplaceStats, setMarketplaceStats] = useState<MarketplaceStats>({
+    totalOrders: 0,
+    pendingOrders: 0,
+    paidOrders: 0,
+    totalGMV: 0,
+    pendingProducts: 0,
+  });
 
   useEffect(() => {
     fetchStats();
+    fetchMarketplaceData();
   }, []);
 
   const fetchStats = async () => {
@@ -105,6 +127,62 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       logger.error('Error fetching stats:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMarketplaceData = async () => {
+    try {
+      // Fetch marketplace toggle state
+      const { data: setting } = await supabase
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'marketplace_enabled')
+        .single();
+
+      if (setting) {
+        setMarketplaceEnabled(setting.setting_value?.value === true);
+      }
+
+      // Fetch marketplace stats in parallel
+      const [ordersRes, pendingProductsRes] = await Promise.all([
+        supabase.from('orders').select('status, total_amount'),
+        supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_approved', false).eq('is_available', true),
+      ]);
+
+      const orders = ordersRes.data || [];
+      const pendingProducts = pendingProductsRes.count || 0;
+
+      setMarketplaceStats({
+        totalOrders: orders.length,
+        pendingOrders: orders.filter(o => o.status === 'pending').length,
+        paidOrders: orders.filter(o => o.status === 'paid').length,
+        totalGMV: orders.filter(o => o.status !== 'cancelled' && o.status !== 'refunded').reduce((sum, o) => sum + (o.total_amount || 0), 0),
+        pendingProducts,
+      });
+    } catch (err) {
+      logger.error('Error fetching marketplace data:', err);
+    }
+  };
+
+  const toggleMarketplace = async () => {
+    try {
+      setMarketplaceToggling(true);
+      const newValue = !marketplaceEnabled;
+
+      const { error } = await supabase
+        .from('app_settings')
+        .update({ setting_value: { value: newValue } })
+        .eq('setting_key', 'marketplace_enabled');
+
+      if (error) throw error;
+
+      setMarketplaceEnabled(newValue);
+      toast.success(`Marketplace ${newValue ? 'enabled — users can now browse and buy' : 'hidden — users see a coming soon screen'}`);
+    } catch (err: any) {
+      logger.error('Error toggling marketplace:', err);
+      toast.error('Failed to update marketplace status');
+    } finally {
+      setMarketplaceToggling(false);
     }
   };
 
@@ -207,7 +285,23 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
       color: 'gray' as const,
       path: '/admin/settings',
       stats: 'Platform config'
-    }
+    },
+    {
+      title: 'Marketplace Orders',
+      description: 'View and manage all customer orders — update status, view details',
+      icon: ShoppingBag,
+      color: 'green' as const,
+      path: '/admin/marketplace-orders',
+      stats: `${marketplaceStats.pendingOrders} pending orders`
+    },
+    {
+      title: 'Marketplace Products',
+      description: 'Approve, reject, and moderate product listings from sellers',
+      icon: Package,
+      color: 'orange' as const,
+      path: '/admin/marketplace-products',
+      stats: `${marketplaceStats.pendingProducts} awaiting approval`
+    },
   ];
 
   if (loading) {
@@ -340,6 +434,47 @@ export function AdminDashboard({ onNavigate, onCartClick, cartItemsCount }: Admi
             </div>
           </Card>
         </div>
+
+        {/* Marketplace Toggle */}
+        <Card className={`p-5 mb-6 border-2 ${marketplaceEnabled ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-lg ${marketplaceEnabled ? 'bg-green-100' : 'bg-gray-200'}`}>
+                <ShoppingBag className={`w-5 h-5 ${marketplaceEnabled ? 'text-green-600' : 'text-gray-500'}`} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">Marketplace</h3>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${marketplaceEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                    {marketplaceEnabled ? 'Live' : 'Hidden'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {marketplaceEnabled
+                    ? 'Users can browse, buy, and sell products'
+                    : 'Users see a coming soon screen — no browsing or purchases'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex gap-4 text-sm text-gray-600">
+                <span><span className="font-semibold text-gray-900">{marketplaceStats.totalOrders}</span> orders</span>
+                <span><span className="font-semibold text-gray-900">₦{marketplaceStats.totalGMV.toLocaleString()}</span> GMV</span>
+                <span><span className="font-semibold text-gray-900">{marketplaceStats.pendingProducts}</span> pending listings</span>
+              </div>
+              <button
+                onClick={toggleMarketplace}
+                disabled={marketplaceToggling}
+                className="flex items-center gap-2 focus:outline-none"
+                title={marketplaceEnabled ? 'Click to hide marketplace' : 'Click to enable marketplace'}
+              >
+                {marketplaceEnabled
+                  ? <ToggleRight className="w-10 h-10 text-green-500" />
+                  : <ToggleLeft className="w-10 h-10 text-gray-400" />}
+              </button>
+            </div>
+          </div>
+        </Card>
 
         {/* Admin Pages */}
         <div className="mb-8">

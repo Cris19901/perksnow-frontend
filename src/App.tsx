@@ -41,6 +41,9 @@ const AdminAuditLogPage = lazy(() => import('./components/pages/AdminAuditLogPag
 const AdminSupportPage = lazy(() => import('./components/pages/AdminSupportPage').then(m => ({ default: m.AdminSupportPage })));
 const AdminKnowledgeBasePage = lazy(() => import('./components/pages/AdminKnowledgeBasePage').then(m => ({ default: m.AdminKnowledgeBasePage })));
 const AdminSubscriptionAnalytics = lazy(() => import('./components/pages/AdminSubscriptionAnalytics').then(m => ({ default: m.AdminSubscriptionAnalytics })));
+const AdminMarketplaceOrdersPage = lazy(() => import('./components/pages/AdminMarketplaceOrdersPage').then(m => ({ default: m.AdminMarketplaceOrdersPage })));
+const AdminMarketplaceProductsPage = lazy(() => import('./components/pages/AdminMarketplaceProductsPage').then(m => ({ default: m.AdminMarketplaceProductsPage })));
+const OrderHistoryPage = lazy(() => import('./components/pages/OrderHistoryPage').then(m => ({ default: m.OrderHistoryPage })));
 // Eagerly-imported heavy components moved to lazy to keep the index chunk small
 const OnboardingFlow = lazy(() => import('./components/OnboardingFlow').then(m => ({ default: m.OnboardingFlow })));
 const CartSheet = lazy(() => import('./components/CartSheet').then(m => ({ default: m.CartSheet })));
@@ -51,88 +54,16 @@ import { toast, Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
-interface CartItem {
-  id: number;
+// Cart item carries all fields needed by checkout + order creation
+export interface CartItem {
+  product_id: string;  // UUID from products table
+  seller_id: string;   // UUID from users table
   name: string;
-  price: number;
+  price: number;       // price in NGN
   image: string;
   quantity: number;
-  seller: string;
+  seller_name: string;
 }
-
-// Mock products database
-const productsDB: Record<number, { name: string; price: number; image: string; seller: string; category: string }> = {
-  1: {
-    name: 'Wireless Noise-Cancelling Headphones',
-    price: 199.99,
-    image: 'https://images.unsplash.com/photo-1717295248302-543d5a49091f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJvbmljcyUyMGdhZGdldHN8ZW58MXx8fHwxNzYyNTM0MTIxfDA&ixlib=rb-4.1.0&q=80&w=1080',
-    seller: 'TechStore',
-    category: 'Electronics',
-  },
-  2: {
-    name: 'Summer Floral Maxi Dress',
-    price: 79.99,
-    image: 'https://images.unsplash.com/photo-1532453288672-3a27e9be9efd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwY2xvdGhpbmd8ZW58MXx8fHwxNzYyNTczMzM3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    seller: 'FashionHub',
-    category: 'Fashion',
-  },
-  3: {
-    name: 'Modern Minimalist Table Lamp',
-    price: 45.99,
-    image: 'https://images.unsplash.com/photo-1616046229478-9901c5536a45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob21lJTIwZGVjb3J8ZW58MXx8fHwxNzYyNTE4MzY5fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    seller: 'HomeDecor',
-    category: 'Home & Living',
-  },
-  4: {
-    name: 'Organic Cotton T-Shirt Pack (3pc)',
-    price: 34.99,
-    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600',
-    seller: 'EcoWear',
-    category: 'Fashion',
-  },
-  5: {
-    name: 'Smart Fitness Watch',
-    price: 149.99,
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
-    seller: 'FitTech',
-    category: 'Electronics',
-  },
-  6: {
-    name: 'Handcrafted Ceramic Mug Set',
-    price: 29.99,
-    image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=600',
-    seller: 'Artisan Crafts',
-    category: 'Home & Living',
-  },
-  7: {
-    name: 'Premium Yoga Mat with Strap',
-    price: 39.99,
-    image: 'https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=600',
-    seller: 'YogaLife',
-    category: 'Sports',
-  },
-  8: {
-    name: 'Vintage Leather Backpack',
-    price: 89.99,
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600',
-    seller: 'UrbanStyle',
-    category: 'Fashion',
-  },
-  101: {
-    name: 'Wireless Noise-Cancelling Headphones',
-    price: 199.99,
-    image: 'https://images.unsplash.com/photo-1717295248302-543d5a49091f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJvbmljcyUyMGdhZGdldHN8ZW58MXx8fHwxNzYyNTM0MTIxfDA&ixlib=rb-4.1.0&q=80&w=1080',
-    seller: 'TechStore Official',
-    category: 'Electronics',
-  },
-  102: {
-    name: 'Summer Floral Maxi Dress',
-    price: 79.99,
-    image: 'https://images.unsplash.com/photo-1532453288672-3a27e9be9efd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwY2xvdGhpbmd8ZW58MXx8fHwxNzYyNTczMzM3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    seller: 'FashionHub',
-    category: 'Fashion',
-  },
-};
 
 // Protected route wrapper component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -213,41 +144,28 @@ function AppContent() {
     checkOnboarding();
   }, [user]);
 
-  const handleAddToCart = (productId: number) => {
-    const product = productsDB[productId];
-    if (!product) return;
-
+  const handleAddToCart = (product: CartItem) => {
     setCartItems((prev) => {
-      const existingItem = prev.find((item) => item.id === productId);
+      const existingItem = prev.find((item) => item.product_id === product.product_id);
       if (existingItem) {
         toast.success('Item quantity updated in cart!');
         return prev.map((item) =>
-          item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
+          item.product_id === product.product_id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       toast.success('Added to cart!');
-      return [
-        ...prev,
-        {
-          id: productId,
-          name: product.name,
-          price: product.price,
-          image: product.image,
-          quantity: 1,
-          seller: product.seller,
-        },
-      ];
+      return [...prev, { ...product, quantity: 1 }];
     });
   };
 
-  const handleUpdateQuantity = (productId: number, quantity: number) => {
+  const handleUpdateQuantity = (productId: string, quantity: number) => {
     setCartItems((prev) =>
-      prev.map((item) => (item.id === productId ? { ...item, quantity } : item))
+      prev.map((item) => (item.product_id === productId ? { ...item, quantity } : item))
     );
   };
 
-  const handleRemoveItem = (productId: number) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== productId));
+  const handleRemoveItem = (productId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.product_id !== productId));
     toast.success('Item removed from cart');
   };
 
@@ -255,19 +173,9 @@ function AppContent() {
     setIsCartOpen(true);
   };
 
-  const handleProductClick = (productId: number) => {
-    const product = productsDB[productId];
-    if (product) {
-      setSelectedProduct({
-        id: productId,
-        ...product,
-        seller: {
-          name: product.seller,
-          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-        },
-      });
-      setIsProductModalOpen(true);
-    }
+  const handleProductClick = (product: any) => {
+    setSelectedProduct(product);
+    setIsProductModalOpen(true);
   };
 
   const handleCheckout = () => {
@@ -606,6 +514,39 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <AdminContentModerationPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <OrderHistoryPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/marketplace-orders"
+          element={
+            <ProtectedRoute>
+              <AdminMarketplaceOrdersPage
+                onCartClick={handleCartClick}
+                cartItemsCount={cartItemsCount}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/marketplace-products"
+          element={
+            <ProtectedRoute>
+              <AdminMarketplaceProductsPage
                 onCartClick={handleCartClick}
                 cartItemsCount={cartItemsCount}
               />

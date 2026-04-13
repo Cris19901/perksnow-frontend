@@ -4,9 +4,10 @@ import { ProductCard } from '../ProductCard';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, ShoppingBag } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { supabase } from '../../lib/supabase';
+import type { CartItem } from '../../App';
 
 const categories = [
   'All Categories',
@@ -20,7 +21,7 @@ const categories = [
 ];
 
 interface MarketplacePageProps {
-  onAddToCart: (id: number) => void;
+  onAddToCart: (product: CartItem) => void;
   onNavigate?: (page: string) => void;
   onCartClick?: () => void;
   cartItemsCount?: number;
@@ -32,55 +33,79 @@ export function MarketplacePage({ onAddToCart, onNavigate, onCartClick, cartItem
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [marketplaceEnabled, setMarketplaceEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
-    async function fetchProducts() {
-      try {
-        setLoading(true);
-        setError(null);
+    checkMarketplaceEnabled();
+  }, []);
 
-        const { data: productsData, error: productsError } = await supabase
-          .from('products')
-          .select(`
-            *,
-            users:seller_id (
-              id,
-              username,
-              full_name,
-              avatar_url
-            )
-          `)
-          .eq('is_available', true)
-          .order('created_at', { ascending: false });
+  const checkMarketplaceEnabled = async () => {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('setting_value')
+      .eq('setting_key', 'marketplace_enabled')
+      .single();
 
-        if (productsError) throw productsError;
+    const enabled = data?.setting_value?.value === true;
+    setMarketplaceEnabled(enabled);
 
-        // Transform products data to match the ProductCard component format
-        const transformedProducts = productsData?.map((product: any) => ({
-          id: product.id,
+    if (enabled) fetchProducts();
+    else setLoading(false);
+  };
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          users:seller_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('is_available', true)
+        .eq('is_approved', true)
+        .order('created_at', { ascending: false });
+
+      if (productsError) throw productsError;
+
+      const transformedProducts = productsData?.map((product: any) => ({
+        product_id: product.id,
+        seller_id: product.seller_id,
+        name: product.title,
+        price: product.price,
+        image: product.images?.[0] || product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
+        seller_name: product.users?.full_name || product.users?.username || 'Unknown Seller',
+        seller_avatar: product.users?.avatar_url,
+        category: product.category || 'General',
+        rating: product.rating || 0,
+        reviews: product.reviews_count || 0,
+        rawProduct: {
+          ...product,
           name: product.title,
-          price: product.price,
-          image: product.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
           seller: {
             name: product.users?.full_name || product.users?.username || 'Unknown Seller',
-            avatar: product.users?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+            avatar: product.users?.avatar_url || '',
           },
-          category: product.category || 'General',
-          rating: 4.5, // Default rating (you can add a ratings table later)
-          reviews: 0, // Default reviews count (you can add a reviews table later)
-        })) || [];
+          images: product.images || (product.image_url ? [product.image_url] : []),
+          inStock: (product.stock_quantity || 0) > 0,
+        },
+      })) || [];
 
-        setProducts(transformedProducts);
-      } catch (err: any) {
-        console.error('Error fetching products:', err);
-        setError(err.message || 'Failed to load products');
-      } finally {
-        setLoading(false);
-      }
+      setProducts(transformedProducts);
+    } catch (err: any) {
+      console.error('Error fetching products:', err);
+      setError(err.message || 'Failed to load products');
+    } finally {
+      setLoading(false);
     }
-
-    fetchProducts();
-  }, []);
+  };
 
   const filteredProducts = products.filter((product) => {
     const matchesCategory = selectedCategory === 'All Categories' || product.category === selectedCategory;
@@ -88,10 +113,28 @@ export function MarketplacePage({ onAddToCart, onNavigate, onCartClick, cartItem
     return matchesCategory && matchesSearch;
   });
 
+  // Coming soon screen when marketplace is disabled
+  if (marketplaceEnabled === false) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header onNavigate={onNavigate} onCartClick={onCartClick} cartItemsCount={cartItemsCount} currentPage="marketplace" />
+        <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center">
+          <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+            <ShoppingBag className="w-10 h-10 text-purple-600" />
+          </div>
+          <h1 className="text-2xl font-bold mb-3">Marketplace Coming Soon</h1>
+          <p className="text-gray-500 max-w-sm">
+            We're putting the finishing touches on our marketplace. Check back soon to discover amazing products from our community!
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header 
-        onNavigate={onNavigate} 
+      <Header
+        onNavigate={onNavigate}
         onCartClick={onCartClick}
         cartItemsCount={cartItemsCount}
         currentPage="marketplace"
@@ -142,9 +185,7 @@ export function MarketplacePage({ onAddToCart, onNavigate, onCartClick, cartItem
               key={category}
               variant={selectedCategory === category ? 'default' : 'outline'}
               className={`cursor-pointer whitespace-nowrap ${
-                selectedCategory === category
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                  : ''
+                selectedCategory === category ? 'bg-gradient-to-r from-purple-600 to-pink-600' : ''
               }`}
               onClick={() => setSelectedCategory(category)}
             >
@@ -153,24 +194,19 @@ export function MarketplacePage({ onAddToCart, onNavigate, onCartClick, cartItem
           ))}
         </div>
 
-        {/* Loading State */}
+        {/* Loading */}
         {loading && (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto" />
             <p className="mt-4 text-gray-600">Loading products...</p>
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
             <p className="text-red-600">Error: {error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-red-700 underline"
-            >
-              Try again
-            </button>
+            <button onClick={fetchProducts} className="mt-2 text-red-700 underline">Try again</button>
           </div>
         )}
 
@@ -179,7 +215,11 @@ export function MarketplacePage({ onAddToCart, onNavigate, onCartClick, cartItem
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} {...product} onAddToCart={onAddToCart} />
+                <ProductCard
+                  key={product.product_id}
+                  {...product}
+                  onAddToCart={onAddToCart}
+                />
               ))}
             </div>
 

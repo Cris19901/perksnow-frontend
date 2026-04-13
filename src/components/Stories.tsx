@@ -191,7 +191,7 @@ export function Stories() {
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-hidden">
         <div className="flex items-center gap-3 mb-3">
           <h3 className="text-sm font-semibold text-gray-800">Stories</h3>
           <button

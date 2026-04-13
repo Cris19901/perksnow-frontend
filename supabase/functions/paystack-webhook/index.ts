@@ -53,6 +53,31 @@ serve(async (req) => {
 
       console.log('Payment successful:', { reference, amount, metadata })
 
+      // --- MARKETPLACE ORDER PAYMENT ---
+      if (metadata?.type === 'marketplace_order' && metadata?.order_id) {
+        const orderId = metadata.order_id
+        console.log('Marketplace order payment confirmed:', orderId)
+
+        // Mark order as paid
+        const { error: orderError } = await supabase
+          .from('orders')
+          .update({ status: 'paid', updated_at: new Date().toISOString() })
+          .eq('id', orderId)
+          .eq('status', 'pending') // idempotency guard
+
+        if (orderError) {
+          console.error('Error updating order status:', orderError)
+        } else {
+          console.log('Order marked as paid:', orderId)
+        }
+
+        return new Response(
+          JSON.stringify({ received: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        )
+      }
+      // --- END MARKETPLACE ORDER PAYMENT ---
+
       // Update payment transaction
       const { error: txError } = await supabase
         .from('payment_transactions')

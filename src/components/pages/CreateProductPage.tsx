@@ -262,9 +262,10 @@ export function CreateProductPage({ onNavigate, onCartClick, cartItemsCount }: C
         <div className="flex items-center justify-center h-[calc(100vh-200px)] px-4">
           <div className="bg-white border border-gray-200 rounded-lg p-8 max-w-md text-center">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Product Listed!</h2>
-            <p className="text-gray-600 mb-4">Your product has been successfully listed on the marketplace.</p>
-            <p className="text-sm text-gray-500">Redirecting to marketplace...</p>
+            <h2 className="text-2xl font-bold mb-2">Product Submitted!</h2>
+            <p className="text-gray-600 mb-2">Your product has been submitted and is pending admin approval.</p>
+            <p className="text-sm text-gray-500 mb-4">It will appear in the marketplace once approved — usually within 24 hours.</p>
+            <p className="text-sm text-gray-400">Redirecting...</p>
           </div>
         </div>
         <MobileBottomNav currentPage="create" onNavigate={onNavigate} />

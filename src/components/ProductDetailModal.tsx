@@ -2,18 +2,22 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dial
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { ShoppingCart, Heart, Share2, Store, Star } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingCart, Heart, Star, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useCurrency } from '../contexts/CurrencyContext';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'sonner';
+import type { CartItem } from '../App';
 
 interface Product {
-  id: number;
+  id: string;
+  seller_id?: string;
   name: string;
   price: number;
-  image: string;
+  image?: string;
   seller: {
     name: string;
     avatar: string;
@@ -27,44 +31,71 @@ interface Product {
   images?: string[];
 }
 
+interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  reviewer: { username: string; avatar_url: string | null } | null;
+}
+
 interface ProductDetailModalProps {
   product: Product | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddToCart?: (id: number) => void;
+  onAddToCart?: (product: CartItem) => void;
 }
 
-const mockReviews = [
-  {
-    id: 1,
-    author: 'Sarah Johnson',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    rating: 5,
-    comment: 'Absolutely love this product! Quality is amazing and delivery was super fast.',
-    date: '2 days ago',
-  },
-  {
-    id: 2,
-    author: 'Mike Wilson',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    rating: 4,
-    comment: 'Great product, exactly as described. Would recommend!',
-    date: '1 week ago',
-  },
-  {
-    id: 3,
-    author: 'Emma Davis',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-    rating: 5,
-    comment: 'Excellent quality and the seller was very responsive to my questions.',
-    date: '2 weeks ago',
-  },
-];
-
 export function ProductDetailModal({ product, open, onOpenChange, onAddToCart }: ProductDetailModalProps) {
+  const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
-  const { formatPriceInUSD } = useCurrency();
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [newRating, setNewRating] = useState(0);
+  const [newComment, setNewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  useEffect(() => {
+    if (open && product?.id) {
+      fetchReviews(product.id);
+    }
+  }, [open, product?.id]);
+
+  const fetchReviews = async (productId: string) => {
+    setReviewsLoading(true);
+    const { data } = await supabase
+      .from('product_reviews')
+      .select(`id, rating, comment, created_at, reviewer:users!product_reviews_reviewer_id_fkey(username, avatar_url)`)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+    setReviews((data as any) || []);
+    setReviewsLoading(false);
+  };
+
+  const submitReview = async () => {
+    if (!user || !product) return;
+    if (newRating === 0) { toast.error('Please select a rating'); return; }
+    try {
+      setSubmittingReview(true);
+      const { error } = await supabase
+        .from('product_reviews')
+        .insert({ product_id: product.id, reviewer_id: user.id, rating: newRating, comment: newComment.trim() || null });
+      if (error) {
+        if (error.code === '23505') toast.error('You have already reviewed this product');
+        else throw error;
+        return;
+      }
+      toast.success('Review submitted!');
+      setNewRating(0);
+      setNewComment('');
+      fetchReviews(product.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   if (!product) return null;
 
@@ -129,7 +160,7 @@ export function ProductDetailModal({ product, open, onOpenChange, onAddToCart }:
                 </span>
               </div>
 
-              <p className="text-4xl text-purple-600 mb-4">{formatPriceInUSD(product.price)}</p>
+              <p className="text-4xl text-purple-600 mb-4">₦{product.price.toLocaleString()}</p>
 
               <p className="text-gray-600 mb-6">
                 {product.description || 'High quality product with excellent craftsmanship. Perfect for everyday use and built to last.'}
@@ -163,7 +194,15 @@ export function ProductDetailModal({ product, open, onOpenChange, onAddToCart }:
               <Button
                 className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 gap-2"
                 size="lg"
-                onClick={() => onAddToCart?.(product.id)}
+                onClick={() => onAddToCart?.({
+                  product_id: product.id,
+                  seller_id: product.seller_id || '',
+                  name: product.name,
+                  price: product.price,
+                  image: product.images?.[0] || product.image || '',
+                  quantity: 1,
+                  seller_name: product.seller?.name || '',
+                })}
                 disabled={product.inStock === false}
               >
                 <ShoppingCart className="w-5 h-5" />
@@ -198,53 +237,87 @@ export function ProductDetailModal({ product, open, onOpenChange, onAddToCart }:
         <div className="border-t p-6">
           <Tabs defaultValue="reviews">
             <TabsList className="w-full justify-start">
-              <TabsTrigger value="reviews">Reviews ({mockReviews.length})</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
               <TabsTrigger value="description">Description</TabsTrigger>
               <TabsTrigger value="shipping">Shipping Info</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="reviews" className="space-y-4 mt-4">
-              {mockReviews.map((review) => (
-                <div key={review.id} className="border-b pb-4 last:border-b-0">
-                  <div className="flex items-start gap-3">
-                    <Avatar>
-                      <AvatarImage src={review.avatar} />
-                      <AvatarFallback>{review.author[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <p>{review.author}</p>
-                        <span className="text-sm text-gray-500">{review.date}</span>
+
+            <TabsContent value="reviews" className="mt-4 space-y-4">
+              {/* Write a review */}
+              {user && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                  <p className="text-sm font-medium mb-2">Leave a Review</p>
+                  <div className="flex gap-1 mb-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <button key={i} onClick={() => setNewRating(i + 1)}>
+                        <Star className={`w-6 h-6 ${i < newRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    rows={3}
+                    placeholder="Share your experience with this product..."
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="mt-2 bg-purple-600 hover:bg-purple-700"
+                    disabled={submittingReview || newRating === 0}
+                    onClick={submitReview}
+                  >
+                    {submittingReview ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                    Submit Review
+                  </Button>
+                </div>
+              )}
+
+              {/* Reviews list */}
+              {reviewsLoading ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+              ) : reviews.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No reviews yet. Be the first to review this product!</p>
+              ) : (
+                reviews.map(review => (
+                  <div key={review.id} className="border-b pb-4 last:border-b-0">
+                    <div className="flex items-start gap-3">
+                      <Avatar>
+                        <AvatarImage src={review.reviewer?.avatar_url || undefined} />
+                        <AvatarFallback>{review.reviewer?.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-medium text-sm">@{review.reviewer?.username || 'User'}</p>
+                          <span className="text-xs text-gray-400">
+                            {new Date(review.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-0.5 mb-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                          ))}
+                        </div>
+                        {review.comment && <p className="text-sm text-gray-600">{review.comment}</p>}
                       </div>
-                      <div className="flex items-center gap-1 mb-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < review.rating ? 'fill-yellow-500 text-yellow-500' : 'text-gray-300'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-sm text-gray-600">{review.comment}</p>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </TabsContent>
-            
+
             <TabsContent value="description" className="mt-4">
               <p className="text-gray-600">
-                {product.description || 'This is a high-quality product made with premium materials. It features excellent craftsmanship and attention to detail. Perfect for both casual and professional use.'}
+                {product.description || 'No description provided for this product.'}
               </p>
             </TabsContent>
-            
+
             <TabsContent value="shipping" className="mt-4">
               <div className="space-y-2 text-sm">
-                <p><strong>Standard Shipping:</strong> 3-5 business days - Free on orders over $50</p>
-                <p><strong>Express Shipping:</strong> 1-2 business days - $15.99</p>
-                <p><strong>International Shipping:</strong> 7-14 business days - Calculated at checkout</p>
-                <p className="text-gray-600 mt-4">All orders are processed within 24 hours. You will receive a tracking number once your order ships.</p>
+                <p><strong>Standard Shipping:</strong> 3-7 business days — ₦1,500</p>
+                <p><strong>Processing Time:</strong> 1-2 business days before dispatch</p>
+                <p><strong>Returns:</strong> Contact seller within 7 days of delivery</p>
+                <p className="text-gray-500 mt-3">All orders are confirmed once payment is verified. You will receive updates on your order status.</p>
               </div>
             </TabsContent>
           </Tabs>

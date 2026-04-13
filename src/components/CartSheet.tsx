@@ -4,36 +4,33 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetFooter,
 } from './ui/sheet';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
 import { Minus, Plus, X } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useCurrency } from '../contexts/CurrencyContext';
-
-interface CartItem {
-  id: number;
-  name: string;
-  price: number;
-  image: string;
-  quantity: number;
-  seller: string;
-}
+import { useNavigate } from 'react-router-dom';
+import type { CartItem } from '../App';
 
 interface CartSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: CartItem[];
-  onUpdateQuantity: (id: number, quantity: number) => void;
-  onRemoveItem: (id: number) => void;
+  onUpdateQuantity: (productId: string, quantity: number) => void;
+  onRemoveItem: (productId: string) => void;
 }
 
 export function CartSheet({ open, onOpenChange, items, onUpdateQuantity, onRemoveItem }: CartSheetProps) {
-  const { formatPriceInUSD } = useCurrency();
+  const navigate = useNavigate();
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = subtotal > 0 ? 5.99 : 0;
+  const shipping = subtotal > 0 ? 1500 : 0; // ₦1,500 flat shipping
   const total = subtotal + shipping;
+
+  const handleCheckout = () => {
+    if (items.length === 0) return;
+    onOpenChange(false);
+    navigate('/checkout');
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -55,7 +52,7 @@ export function CartSheet({ open, onOpenChange, items, onUpdateQuantity, onRemov
             <>
               <div className="flex-1 overflow-auto py-6 space-y-4">
                 {items.map((item) => (
-                  <div key={item.id} className="flex gap-4">
+                  <div key={item.product_id} className="flex gap-4">
                     <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                       <ImageWithFallback
                         src={item.image}
@@ -67,30 +64,32 @@ export function CartSheet({ open, onOpenChange, items, onUpdateQuantity, onRemov
                       <div className="flex justify-between items-start mb-1">
                         <h4 className="text-sm line-clamp-2">{item.name}</h4>
                         <button
-                          onClick={() => onRemoveItem(item.id)}
-                          className="text-gray-400 hover:text-gray-600"
+                          onClick={() => onRemoveItem(item.product_id)}
+                          className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2">{item.seller}</p>
+                      <p className="text-xs text-gray-500 mb-2">by {item.seller_name}</p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 border rounded-md">
                           <button
-                            onClick={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                            onClick={() => onUpdateQuantity(item.product_id, Math.max(1, item.quantity - 1))}
                             className="p-1 hover:bg-gray-100"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
                           <span className="text-sm w-8 text-center">{item.quantity}</span>
                           <button
-                            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => onUpdateQuantity(item.product_id, item.quantity + 1)}
                             className="p-1 hover:bg-gray-100"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="text-purple-600">{formatPriceInUSD(item.price * item.quantity)}</span>
+                        <span className="text-purple-600 font-medium">
+                          ₦{(item.price * item.quantity).toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -101,19 +100,23 @@ export function CartSheet({ open, onOpenChange, items, onUpdateQuantity, onRemov
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Subtotal</span>
-                    <span>{formatPriceInUSD(subtotal)}</span>
+                    <span>₦{subtotal.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Shipping</span>
-                    <span>{formatPriceInUSD(shipping)}</span>
+                    <span>₦{shipping.toLocaleString()}</span>
                   </div>
                   <Separator />
-                  <div className="flex justify-between">
+                  <div className="flex justify-between font-semibold">
                     <span>Total</span>
-                    <span className="text-xl text-purple-600">{formatPriceInUSD(total)}</span>
+                    <span className="text-xl text-purple-600">₦{total.toLocaleString()}</span>
                   </div>
                 </div>
-                <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600" size="lg">
+                <Button
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
+                  size="lg"
+                  onClick={handleCheckout}
+                >
                   Proceed to Checkout
                 </Button>
               </div>
