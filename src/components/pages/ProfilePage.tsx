@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import type { CartItem } from '../../App';
 import { Header } from '../Header';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -20,7 +21,7 @@ import { toast } from 'sonner';
 interface ProfilePageProps {
   onNavigate?: (page: string) => void;
   onCartClick?: () => void;
-  onAddToCart?: (id: number) => void;
+  onAddToCart?: (product: CartItem) => void;
   cartItemsCount?: number;
 }
 
@@ -120,85 +121,60 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
       console.log('✅ ProfilePage: Profile data:', profileData);
       setProfile(profileData);
 
-      // Fetch user's posts (using targetUserId)
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          users:user_id (
-            id,
-            username,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false });
+      // Fetch all content in parallel — each query is independent so one failure
+      // doesn't kill the whole profile load
+      const [postsResult, productsResult, reelsResult, activitiesResult] = await Promise.allSettled([
+        supabase
+          .from('posts')
+          .select(`*, users:user_id (id, username, full_name, avatar_url)`)
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false }),
 
-      if (postsError) throw postsError;
-      setPosts(postsData || []);
+        supabase
+          .from('products')
+          .select(`*, users:seller_id (id, username, full_name, avatar_url)`)
+          .eq('seller_id', targetUserId)
+          .order('created_at', { ascending: false }),
 
-      // Fetch user's products (using targetUserId)
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select(`
-          *,
-          users:seller_id (
-            id,
-            username,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('seller_id', targetUserId)
-        .order('created_at', { ascending: false});
+        supabase
+          .from('reels')
+          .select(`id, video_url, thumbnail_url, caption, duration, created_at, views_count, likes_count, comments_count`)
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false }),
 
-      if (productsError) throw productsError;
-      console.log('✅ ProfilePage: Products fetched:', productsData?.length || 0);
-      setProducts(productsData || []);
+        supabase
+          .from('activities')
+          .select(`id, user_id, activity_type, content, image_url, created_at, users:user_id (id, username, full_name, avatar_url)`)
+          .eq('user_id', targetUserId)
+          .in('activity_type', ['profile_update', 'cover_update'])
+          .eq('is_public', true)
+          .order('created_at', { ascending: false }),
+      ]);
 
-      // Fetch user's reels (using targetUserId)
-      const { data: reelsData, error: reelsError } = await supabase
-        .from('reels')
-        .select(`
-          id,
-          video_url,
-          thumbnail_url,
-          caption,
-          duration,
-          created_at,
-          views_count,
-          likes_count,
-          comments_count
-        `)
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false });
+      if (postsResult.status === 'fulfilled' && !postsResult.value.error) {
+        setPosts(postsResult.value.data || []);
+      } else {
+        console.warn('ProfilePage: posts fetch failed, showing empty');
+        setPosts([]);
+      }
 
-      if (reelsError) throw reelsError;
-      console.log('✅ ProfilePage: Reels fetched:', reelsData?.length || 0);
-      setReels(reelsData || []);
+      if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
+        setProducts(productsResult.value.data || []);
+      } else {
+        console.warn('ProfilePage: products fetch failed, showing empty');
+        setProducts([]);
+      }
 
-      // Fetch user's activities (profile/cover updates)
-      const { data: activitiesData, error: activitiesError } = await supabase
-        .from('activities')
-        .select(`
-          id,
-          user_id,
-          activity_type,
-          content,
-          image_url,
-          created_at,
-          users:user_id (
-            id,
-            username,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('user_id', targetUserId)
-        .in('activity_type', ['profile_update', 'cover_update'])
-        .eq('is_public', true)
-        .order('created_at', { ascending: false });
+      if (reelsResult.status === 'fulfilled' && !reelsResult.value.error) {
+        setReels(reelsResult.value.data || []);
+      } else {
+        console.warn('ProfilePage: reels fetch failed, showing empty');
+        setReels([]);
+      }
+
+      const activitiesData = activitiesResult.status === 'fulfilled' && !activitiesResult.value.error
+        ? activitiesResult.value.data
+        : [];
 
       if (!activitiesError && activitiesData) {
         console.log('✅ ProfilePage: Activities fetched:', activitiesData.length);
@@ -470,7 +446,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         currentPage="profile"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-24 md:pb-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 pb-24 md:pb-6 overflow-hidden">
         {/* Cover Photo */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
           <div className="h-48 sm:h-64 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 relative group">
@@ -650,7 +626,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
         </div>
 
         {/* Content Tabs */}
-        <Tabs defaultValue="posts" className="space-y-6">
+        <Tabs defaultValue="posts" className="space-y-6 min-w-0 overflow-hidden">
           <TabsList className="bg-white border border-gray-200 w-full sm:w-auto">
             <TabsTrigger value="posts" className="flex-1 sm:flex-initial">Posts</TabsTrigger>
             <TabsTrigger value="reels" className="flex-1 sm:flex-initial">Reels</TabsTrigger>
@@ -725,7 +701,7 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                 <p className="text-gray-600">No reels yet</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 min-w-0">
                 {reels.map((reel) => (
                   <div
                     key={reel.id}
@@ -774,21 +750,19 @@ export function ProfilePage({ onNavigate, onCartClick, onAddToCart, cartItemsCou
                 <p className="text-gray-600">No products yet</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 min-w-0">
                 {products.map((product) => (
                   <ProductCard
                     key={product.id}
-                    id={product.id}
+                    product_id={product.id}
+                    seller_id={product.seller_id || ''}
                     name={product.title || product.name || 'Untitled'}
                     price={product.price || 0}
-                    image={product.image_url || product.images?.[0] || ''}
+                    image={product.images?.[0] || product.image_url || ''}
                     category={product.category || 'Other'}
-                    rating={product.rating || 4.5}
+                    rating={product.rating || 0}
                     reviews={product.reviews_count || 0}
-                    seller={{
-                      name: product.users?.full_name || product.users?.username || 'Unknown',
-                      avatar: product.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${product.seller_id}`,
-                    }}
+                    seller_name={product.users?.full_name || product.users?.username || 'Unknown'}
                     onAddToCart={onAddToCart}
                   />
                 ))}
